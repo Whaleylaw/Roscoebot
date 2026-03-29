@@ -1,61 +1,64 @@
 # Testing Patterns
 
-**Analysis Date:** 2026-03-26
+**Analysis Date:** 2026-03-28
 
 ## Test Framework
 
 **Runner:**
 
-- Vitest (latest)
-- Configuration: `vitest.config.ts` (main), plus specialized configs:
-  - `vitest.unit.config.ts` – unit test runner
-  - `vitest.channels.config.ts` – channel integration tests
-  - `vitest.e2e.config.ts` – end-to-end tests
-  - `vitest.extensions.config.ts` – plugin/extension tests
-  - `vitest.gateway.config.ts` – gateway tests
-  - `vitest.live.config.ts` – live integration tests (require real keys)
-  - `vitest.performance-config.ts` – performance/timing tests
+- Vitest (multiple configs, see below)
+- Config: `vitest.config.ts` (base), `vitest.unit.config.ts`, `vitest.e2e.config.ts`, `vitest.gateway.config.ts`, `vitest.channels.config.ts`, `vitest.extensions.config.ts`, `vitest.live.config.ts`
+- Pool: `forks` only — never `threads`, `vmThreads`, or `vmForks`
+- Workers: max 16; CI uses 2–3 workers; local uses `max(4, min(16, cpuCount))`
 
 **Assertion Library:**
 
-- Vitest built-in `expect()` API (compatible with Jest)
+- Vitest built-in (`expect`)
 
 **Run Commands:**
 
 ```bash
-pnpm test                    # Run all unit tests via test-parallel.mjs runner
-pnpm test:coverage          # Run with v8 coverage and report to stdout
-pnpm test -- <path>         # Run tests matching path/filter
-pnpm test -- -t "pattern"   # Run tests matching description
-pnpm test:channels          # Run channel integration tests (requires OPENCLAW_TEST_INCLUDE_CHANNELS=1)
-pnpm test:e2e               # Run e2e tests
-pnpm test:live              # Run live integration tests (requires LIVE=1)
-pnpm test:docker:live-models  # Docker-based live model tests
-pnpm test:docker:onboard    # Docker-based onboarding e2e
+pnpm test                    # Run all unit tests via parallel wrapper (node scripts/test-parallel.mjs)
+pnpm test -- <path-or-filter> [vitest args...]   # Scoped run (e.g., pnpm test -- src/infra/errors.test.ts)
+pnpm test:coverage           # Unit tests with V8 coverage (vitest run --config vitest.unit.config.ts --coverage)
+pnpm test:e2e                # E2E tests (vitest run --config vitest.e2e.config.ts)
+pnpm test:changed            # Only tests changed since origin/main
+OPENCLAW_LIVE_TEST=1 pnpm test:live   # Live tests with real API keys
+OPENCLAW_TEST_PROFILE=low OPENCLAW_TEST_SERIAL_GATEWAY=1 pnpm test   # Low-memory mode for CI
 ```
 
 ## Test File Organization
 
-**Location:**
-
-- Colocated with source: `src/**/*.test.ts`
-- Extensions: `extensions/**/*.test.ts`
-- Infrastructure: `test/**/*.test.ts`
-- UI tests: `ui/src/**/*.test.ts` (listed explicitly in `vitest.config.ts` include)
+**Location:** Co-located with source in the same directory
 
 **Naming:**
 
-- Pattern: `{moduleName}.test.ts` for unit tests
-- Pattern: `{moduleName}.e2e.test.ts` for end-to-end tests
-- Pattern: `{moduleName}.live.test.ts` for live integration tests (real keys/external services)
+- Unit: `<module>.test.ts` — same name as the source file: `backoff.ts` → `backoff.test.ts`
+- E2E: `<module>.e2e.test.ts` — for gateway/agent integration: `pi-embedded-runner.e2e.test.ts`
+- Live (real API keys): `<module>.live.test.ts` — excluded from default runs: `anthropic.setup-token.live.test.ts`
+- Node-environment-only: `<module>.node.test.ts` — `storage.node.test.ts`
+- Browser-environment: `<module>.browser.test.ts` — `focus-mode.browser.test.ts`
 
 **Structure:**
 
 ```
-src/shared/
-├── subagents-format.ts      # Implementation
-├── subagents-format.test.ts # Tests
-└── requirements.test.ts      # Tests for requirements.ts
+src/
+  infra/
+    backoff.ts
+    backoff.test.ts          # co-located unit test
+    gateway-lock.ts
+    gateway-lock.test.ts
+src/
+  test-utils/                # shared test helpers (NOT test files)
+    env.ts
+    temp-home.ts
+    tracked-temp-dirs.ts
+    fixture-suite.ts
+    fetch-mock.ts
+    vitest-mock-fn.ts
+test/
+  setup.ts                   # global setup file
+  test-env.ts                # HOME isolation helpers
 ```
 
 ## Test Structure
@@ -63,249 +66,305 @@ src/shared/
 **Suite Organization:**
 
 ```typescript
-import { describe, expect, it, vi } from "vitest";
-import { formatTokenShort, resolveTotalTokens } from "./subagents-format.js";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { functionUnderTest } from "./module.js"; // .js extension required
 
-describe("shared/subagents-format", () => {
-  it("formats token counts with integer, kilo, and million branches", () => {
-    expect(formatTokenShort()).toBeUndefined();
-    expect(formatTokenShort(999.9)).toBe("999");
-    expect(formatTokenShort(1_500)).toBe("1.5k");
+describe("module name", () => {
+  // Shared fixtures at describe level
+  const tempDirs = createTrackedTempDirs();
+
+  beforeAll(async () => {
+    // One-time setup: create temp root dirs
   });
 
-  it("resolves token totals and io breakdowns from valid numeric fields only", () => {
-    expect(resolveTotalTokens()).toBeUndefined();
-    expect(resolveTotalTokens({ totalTokens: 42 })).toBe(42);
-    expect(resolveTotalTokens({ inputTokens: Number.NaN, outputTokens: 5 })).toBeUndefined();
+  beforeEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  afterEach(async () => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+    await tempDirs.cleanup();
+  });
+
+  afterAll(async () => {
+    // Clean up temp directories created with fs.mkdtemp
+    await fs.rm(fixtureRoot, { recursive: true, force: true });
+  });
+
+  it("describes the behavior being tested", async () => {
+    // arrange
+    const env = await makeEnv();
+    // act
+    const result = await functionUnderTest(env);
+    // assert
+    expect(result).not.toBeNull();
   });
 });
 ```
 
+Top-level `beforeAll` / `afterAll` without a `describe` wrapper is also used when the whole file covers one module: `src/pairing/pairing-store.test.ts`
+
 **Patterns:**
 
-- Top-level `describe()` with module path as name: `describe("shared/subagents-format", () => { ... })`
-- Each `it()` block tests a single behavior or edge case
-- No `beforeEach()`/`afterEach()` unless needed (vitest auto-restores stubbed env/globals)
-- Test names are descriptive and user-focused: "formats token counts with..." not "test token format"
+- Test description: plain English sentence beginning with a verb ("resolves after delay", "blocks concurrent acquisition")
+- Each `it` tests one behavior; group related tests in nested `describe` blocks
+- Always clean up timers in `afterEach`: `vi.useRealTimers()`, `vi.restoreAllMocks()`
 
 ## Mocking
 
-**Framework:** Vitest `vi` module
+**Framework:** Vitest (`vi`)
 
-**Patterns:**
+**Module Mocking (top-level, hoisted):**
 
 ```typescript
-// Module mocking (in test setup or test file)
-vi.mock("@mariozechner/pi-ai", async (importOriginal) => {
-  const original = await importOriginal<typeof import("@mariozechner/pi-ai")>();
-  return {
-    ...original,
-    getOAuthApiKey: () => undefined,
-    getOAuthProviders: () => [],
-    loginOpenAICodex: vi.fn(),
-  };
-});
-
-// Spying on methods
-const readFileSyncSpy = vi.spyOn(fsSync, "readFileSync").mockImplementation(() => {
-  throw new Error("no proc status");
-});
-const killSpy = vi.spyOn(process, "kill").mockImplementation(() => true);
-
-// Verifying calls
-expect(readFileSyncSpy).toHaveBeenCalledWith("/proc/42/status", "utf8");
-expect(killSpy).toHaveBeenCalledWith(42, 0);
-
-// Environment variable stubbing
-vi.stubEnv("TELEGRAM_BOT_TOKEN", "test-token");
-// Auto-restored after test (via unstubEnvs: true in vitest.config.ts)
-
-// Global stubbing
-vi.stubGlobals("process", { pid: 12345 });
-// Auto-restored after test (via unstubGlobals: true)
+vi.mock("../infra/device-bootstrap.js", () => ({
+  issueDeviceBootstrapToken: vi.fn(async () => ({
+    token: "bootstrap-123",
+    expiresAtMs: 123,
+  })),
+}));
 ```
+
+Used for: external services, native modules, modules with side effects at import time.
+
+**Spy-based Mocking (per-test):**
+
+```typescript
+const spy = vi
+  .spyOn(fs, "stat")
+  .mockRejectedValue(Object.assign(new Error("EPERM"), { code: "EPERM" }));
+// ...
+spy.mockRestore(); // always in finally or afterEach
+```
+
+Used for: Node built-ins (`fs`, `crypto`, `net`), Math methods (`Math.random`).
+
+**Environment Variable Stubbing:**
+
+```typescript
+vi.stubEnv("OPENCLAW_GATEWAY_TOKEN", "");
+vi.stubEnv("HOME", "/srv/openclaw-home");
+// Automatically restored because vitest.config.ts sets unstubEnvs: true
+```
+
+**Fake Timers:**
+
+```typescript
+vi.useFakeTimers();
+vi.setSystemTime(new Date("2026-03-14T12:00:00Z"));
+// ... test code ...
+vi.advanceTimersByTime(1000);
+// In afterEach:
+vi.useRealTimers();
+```
+
+**Mock Type Helper:**
+
+```typescript
+// src/test-utils/vitest-mock-fn.ts
+export type MockFn<T extends (...args: any[]) => any = (...args: any[]) => any> =
+  import("vitest").Mock<T>;
+```
+
+Use `MockFn<typeof someFn>` to type mock variables; avoids TS2742 inferred type issues.
 
 **What to Mock:**
 
-- External modules (npm packages) when testing in isolation
-- Native APIs when behavior is hard to trigger (e.g., `fs.readFileSync` for `/proc` reads on Linux)
-- `process.platform`, `process.env` when testing platform-specific logic
-- Module methods that involve side effects (file I/O, network, system calls)
+- Node built-ins when testing error handling (EACCES, EPERM, ECONNREFUSED)
+- External HTTP/network calls (never make real network requests in unit tests)
+- File system in tests that run multiple times concurrently (use temp dirs instead when possible)
+- Time-dependent code via `vi.useFakeTimers()`
 
 **What NOT to Mock:**
 
-- Core logic within the same module
-- Pure functions (just call them)
-- Error conditions that can be triggered naturally (e.g., JSON parse errors via bad input)
-- User-facing behavior that should be tested end-to-end
+- The module under test itself
+- Core data structures and pure utility functions
+- File I/O when using isolated temp directories (prefer real FS over mocks)
 
 ## Fixtures and Factories
 
-**Test Data:**
+**Temp Directory Pattern — `createTrackedTempDirs()` (preferred):**
 
 ```typescript
-// Factory patterns in test/setup.ts
-const createStubPlugin = (params: {
-  id: ChannelId;
-  label?: string;
-  aliases?: string[];
-  deliveryMode?: ChannelOutboundAdapter["deliveryMode"];
-}): ChannelPlugin => ({
-  id: params.id,
-  meta: { id: params.id, label: params.label ?? String(params.id), ... },
-  capabilities: { chatTypes: ["direct", "group"] },
-  config: { ... },
-  outbound: createStubOutbound(params.id, params.deliveryMode),
+const tempDirs = createTrackedTempDirs();
+
+afterEach(async () => {
+  await tempDirs.cleanup();
 });
 
-// Mock data setup via direct object literals in test
-const entries: Record<string, string> = {
-  [`/proc/${process.pid}/stat`]: `${process.pid} (node) S 1 ...`,
-  "/proc/42/stat": "...",
-};
-mockProcReads(entries);
+it("does something with files", async () => {
+  const dir = await tempDirs.make("openclaw-test-");
+  // use dir ...
+});
 ```
 
-**Location:**
+Source: `src/test-utils/tracked-temp-dirs.ts`
 
-- Global fixtures in `test/setup.ts` (used by all tests via `setupFiles` in config)
-- Test-specific factories defined inline or in utility modules like `src/test-utils/channel-plugins.ts`
-- Helper functions with test\_ suffix for test-only utilities: `createDefaultRegistry()`, `cleanupSessionStateForTest()`
+**Single Temp Dir — `withTempDir()`:**
+
+```typescript
+await withTempDir("openclaw-test-", async (dir) => {
+  // dir is cleaned up automatically
+});
+```
+
+Source: `src/test-utils/temp-dir.ts`
+
+**Fixture Suite Pattern (multiple cases per test file):**
+
+```typescript
+const suite = createFixtureSuite("openclaw-gateway-lock-");
+
+beforeAll(async () => suite.setup());
+afterAll(async () => suite.cleanup());
+
+it("case A", async () => {
+  const dir = await suite.createCaseDir("case-a");
+  // ...
+});
+```
+
+Source: `src/test-utils/fixture-suite.ts`
+
+**Home Directory Isolation:**
+
+```typescript
+// test/setup.ts runs this for all tests globally:
+const testEnv = withIsolatedTestHome();
+// Redirects HOME/OPENCLAW_STATE_DIR to a temp directory per test run
+```
+
+**Environment Helpers:**
+
+```typescript
+// Scoped env override for async tests:
+await withEnvAsync({ OPENCLAW_STATE_DIR: dir }, async () => {
+  // process.env.OPENCLAW_STATE_DIR === dir here
+});
+
+// Sync env override:
+withEnv({ HOME: "/tmp/fake-home" }, () => {
+  // ...
+});
+```
+
+Source: `src/test-utils/env.ts`
+
+**Helper Functions in Test Files:**
+Complex tests extract helper functions at file scope (not inside `it`):
+
+```typescript
+async function makeEnv() { ... }
+function resolveLockPath(env: NodeJS.ProcessEnv) { ... }
+async function writeLockFile(env: NodeJS.ProcessEnv, params = { startTime: 111 }) { ... }
+```
+
+This keeps `it` blocks short and the intent clear.
 
 ## Coverage
 
 **Requirements:**
 
-- Thresholds enforced: lines 70%, branches 55%, functions 70%, statements 70% (V8 provider)
-- Only applied to `./src/**/*.ts` (not extensions, apps, or tests themselves)
-- Coverage excludes integration surfaces and manually-tested code:
-  - CLI wiring (`src/cli/**`, `src/commands/**`)
-  - Large integrations (`src/channels/**`, `src/gateway/**`, `src/agents/**`)
-  - E2E/manual surfaces (`src/tui/**`, `src/wizard/**`, `src/browser/**`)
+- Lines: 70%
+- Functions: 70%
+- Branches: 55%
+- Statements: 70%
+
+**Provider:** V8
+
+**Scope:** Only `./src/**/*.ts` counts toward coverage. Extensions, UI, CLI wiring, and integration surfaces are excluded. See `vitest.config.ts` coverage.exclude list.
 
 **View Coverage:**
 
 ```bash
-pnpm test:coverage     # Generates lcov report in console; also writes dist/coverage/
-# Open dist/coverage/index.html in browser for detailed per-file coverage
+pnpm test:coverage
+# Outputs text summary + generates lcov report
 ```
 
 ## Test Types
 
-**Unit Tests:**
+**Unit Tests (`*.test.ts`):**
 
-- Scope: Single function or module in isolation
-- Approach: Pure input/output testing (e.g., `formatTokenShort(1500) === "1.5k"`)
-- Mocking: External modules and platform APIs only
-- Example: `src/shared/subagents-format.test.ts` tests formatting logic without network/file I/O
-- Location: Colocated `*.test.ts` files
+- Scope: single module or small set of collaborating modules
+- Use temp dirs and mocked dependencies; no real network
+- Must clean up all timers, mocks, and file system state
+- Included in default `pnpm test` run
 
-**Integration Tests:**
+**E2E Tests (`*.e2e.test.ts`):**
 
-- Scope: Multiple modules working together (channels, providers, config parsing)
-- Approach: Real filesystem, config parsing, partial channel stubs
-- Mocking: Network/external services; local data/config real
-- Run: `pnpm test:channels` (with `OPENCLAW_TEST_INCLUDE_CHANNELS=1`)
-- Example: tests verify gateway/channel routing logic with stub plugins
+- Scope: full agent runs, gateway lifecycle, hook execution chains
+- Config: `vitest.e2e.config.ts`; runs 1 worker locally, 2 on CI
+- Run with: `pnpm test:e2e`
 
-**E2E Tests:**
+**Live Tests (`*.live.test.ts`):**
 
-- Scope: Full workflows (setup, messaging, reply cycles)
-- Approach: Real gateway process, real channel plugins, live config
-- Mocking: External LLM services (stubbed), external messaging APIs (stubbed)
-- Run: `pnpm test:e2e`
-- Configuration: `vitest.e2e.config.ts`
+- Scope: real API provider calls (Anthropic, OpenAI, etc.)
+- Guarded by `isLiveTestEnabled()` from `src/agents/live-test-helpers.ts`
+- Run with: `OPENCLAW_LIVE_TEST=1 pnpm test:live`
+- Use `describe.skip` when the env flag is absent: `const describeLive = LIVE ? describe : describe.skip`
 
-**Live Integration Tests:**
+**Contract Tests:**
 
-- Scope: External service integration (OpenAI, Anthropic, Discord, Slack, etc.)
-- Approach: Real API keys from environment, real external calls
-- Run: `LIVE=1 pnpm test:live` (or `OPENCLAW_LIVE_TEST=1` for OpenClaw-only tests)
-- Configuration: `vitest.live.config.ts`
-- Environment: Excluded from CI by default; manual/local only
+- Location: `src/channels/plugins/contracts/`, `src/plugins/contracts/`
+- Run with: `pnpm test:contracts:channels`, `pnpm test:contracts:plugins`
 
 ## Common Patterns
 
 **Async Testing:**
 
 ```typescript
-// Async test with natural await
-it("returns true for the current running process", async () => {
-  const result = await withLinuxProcessPlatform(async () => {
-    return isPidAlive(process.pid);
-  });
-  expect(result).toBe(true);
+it("resolves after delay using fake timers", async () => {
+  vi.useFakeTimers();
+  const promise = sleep(1000);
+  vi.advanceTimersByTime(1000);
+  await expect(promise).resolves.toBeUndefined();
+  vi.useRealTimers();
 });
-
-// Helper that manages platform restoration
-async function withProcessPlatform<T>(
-  platform: NodeJS.Platform,
-  run: () => Promise<T>,
-): Promise<T> {
-  const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, "platform");
-  Object.defineProperty(process, "platform", { ...originalPlatformDescriptor, value: platform });
-  try {
-    return await run();
-  } finally {
-    Object.defineProperty(process, "platform", originalPlatformDescriptor);
-    vi.restoreAllMocks();
-  }
-}
 ```
 
 **Error Testing:**
 
 ```typescript
-// Expect thrown error
-it("throws clear unknown and ambiguous node errors", () => {
-  expect(() => getNode("unknown")).toThrow("unknown node: unknown");
-  expect(() => getNode("abc")).toThrow(/known:.+/);
+// Test that a function throws a specific error class:
+await expect(pending).rejects.toBeInstanceOf(GatewayLockError);
+
+// Test error shape:
+await expect(fn()).rejects.toMatchObject({
+  message: "aborted",
+  cause: expect.anything(),
 });
 
-// Test error handling path
-it("returns null for invalid PIDs", () => {
-  expect(getProcessStartTime(0)).toBeNull();
-  expect(getProcessStartTime(Number.NaN)).toBeNull();
-});
+// Test a custom error has a specific code:
+const err = Object.assign(new Error("busy"), { code: "EADDRINUSE" });
+expect(hasErrnoCode(err, "EADDRINUSE")).toBe(true);
 ```
 
-**Environment/Global Restoration:**
+**Platform-Conditional Tests:**
 
-- Vitest automatically restores stubbed env and globals after each test (`unstubEnvs: true`, `unstubGlobals: true`)
-- Manual restoration required only for prototype mutation or custom global state
-- Example from `test/setup.ts`: `afterEach()` hook resets plugin registry and cache state
-- Cleanup function calls: `resetContextWindowCacheForTest()`, `cleanupSessionStateForTest()`
+```typescript
+const describeUnix = process.platform === "win32" ? describe.skip : describe;
+describe.skipIf(isWindows)("restart-stale-pids", () => { ... });
+const maybeIt = process.platform === "win32" ? it.skip : it;
+```
 
-**Test Isolation:**
+**Result Object Assertions:**
 
-- `pool: "forks"` (not threads) — each test runs in its own process fork for full isolation
-- Max workers: `localWorkers` (4–16) / CI: 2–3 workers (to avoid resource exhaustion)
-- `forceRerunTriggers` configuration files that invalidate cached test runs
-- Test helpers cleanup: ensure file handles, timers, listeners, module state cleaned up
+```typescript
+const result = await someFunction();
+expect(result.ok).toBe(true);
+if (!result.ok) throw new Error("expected success"); // type narrowing
+expect(result.payload.token).toBe("bootstrap-123");
+```
 
-## Performance & Memory Tests
+**Global Setup (`test/setup.ts`):**
 
-**Experimental Config:**
-
-- `vitest.performance-config.ts` loads optional memory hotspot and timing baselines
-- Run via: scoped test execution or specialized performance suites
-- Tracks call counts and memory usage to catch regressions in hot paths
-
-## Running Tests Locally vs CI
-
-**Local Development:**
-
-- `pnpm test` – defaults to sensible worker count based on CPU count
-- For resource-constrained hosts: `OPENCLAW_TEST_PROFILE=low OPENCLAW_TEST_SERIAL_GATEWAY=1 pnpm test`
-- Watch mode: not typically used (use `--changed` instead)
-
-**CI Pipeline:**
-
-- Runs on GitHub Actions
-- `pnpm check` includes linting, type checking, and base unit tests as gate
-- `pnpm test` full suite before merge to `main`
-- Reduced worker count on Windows (2 workers) vs Linux/macOS (3)
+- Mocks `@mariozechner/pi-ai` and `@mariozechner/clipboard` globally
+- Sets `VITEST=true` and `OPENCLAW_PLUGIN_MANIFEST_CACHE_MS=60000`
+- Creates isolated HOME/state directory via `withIsolatedTestHome()`
+- Resets agent/session/registry state in `afterEach` using test-internal reset helpers (e.g., `resetContextWindowCacheForTest`, `resetSessionWriteLockStateForTest`)
 
 ---
 
-_Testing analysis: 2026-03-26_
+_Testing analysis: 2026-03-28_

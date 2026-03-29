@@ -1,269 +1,431 @@
 # External Integrations
 
-**Analysis Date:** 2026-03-26
+**Analysis Date:** 2026-03-28
 
-## APIs & External Services
+## AI Model Providers
 
-**Language Models (LLM Providers):**
+Each provider is implemented as a bundled plugin under `extensions/<provider>/`. Core provider API key handling lives in `src/agents/` and `src/infra/provider-usage.*.ts`.
 
-- Anthropic Claude - Direct and via Google Vertex AI
-  - SDK: `@anthropic-ai/vertex-sdk` (Vertex) or vendor-specific
-  - Auth: `ANTHROPIC_API_KEY`, `ANTHROPIC_API_KEYS` (comma-separated for rotation)
-  - Config: `extensions/anthropic/`, `extensions/anthropic-vertex/`
+**Anthropic:**
 
-- OpenAI (GPT models)
-  - Auth: `OPENAI_API_KEY` or `OPENAI_API_KEYS` (multiple keys for rotation)
-  - WebSocket streaming: `src/agents/openai-ws-stream.ts`, `openai-ws-connection.ts`
-  - HTTP endpoint support via `src/gateway/openai-http.js`
+- Extension: `extensions/anthropic/` (`@openclaw/anthropic-provider`)
+- Vertex variant: `extensions/anthropic-vertex/` (`@openclaw/anthropic-vertex-provider`), uses `@anthropic-ai/vertex-sdk` ^0.14.4
+- Auth env vars: `ANTHROPIC_API_KEY`, `ANTHROPIC_API_KEY_1`, `ANTHROPIC_API_KEYS` (comma-separated rotation)
+- Claude web provider variant: `src/provider-web.ts`, uses `CLAUDE_AI_SESSION_KEY` / `CLAUDE_WEB_SESSION_KEY` / `CLAUDE_WEB_COOKIE`
 
-- Google Gemini
-  - Auth: `GEMINI_API_KEY` or `GEMINI_API_KEYS`
-  - Schema cleaning: `src/agents/schema/clean-for-gemini.ts`
+**OpenAI:**
 
-- AWS Bedrock
-  - SDK: `@aws-sdk/client-bedrock` (v3.1014.0)
-  - Discovery: `src/agents/bedrock-discovery.js`
-  - Extension: `extensions/amazon-bedrock/`
+- Extension: `extensions/openai/` (`@openclaw/openai-provider`)
+- Auth env vars: `OPENAI_API_KEY`, `OPENAI_API_KEY_1`, `OPENAI_API_KEYS` (comma-separated rotation)
+- GitHub Copilot proxy: `extensions/copilot-proxy/`, `extensions/github-copilot/`; token helper at `src/plugin-sdk/github-copilot-token.ts`
+- Kilocode variant: `extensions/kilocode/`
+- OpenCode variants: `extensions/opencode/`, `extensions/opencode-go/`
 
-- Cloudflare AI Gateway
-  - Provider ID: `cloudflare-ai-gateway`
-  - Auth: `CLOUDFLARE_AI_GATEWAY_API_KEY`
-  - Default model: `claude-sonnet-4-5`
+**Google (Gemini / Vertex):**
 
-- Vercel AI Gateway
-  - Provider ID: `vercel-ai-gateway`
-  - Default model: `anthropic/claude-opus-4.6`
+- Extension: `extensions/google/` (`@openclaw/google-plugin`)
+- Auth: `GEMINI_API_KEY`, `GOOGLE_API_KEY`; Google auth helpers at `src/infra/gemini-auth.ts`
+- Vertex support in Anthropic vertex extension and Google extension
 
-- Additional Providers (82 extensions total covering):
-  - DeepSeek, Mistral, Groq, HuggingFace, Together, Qwen, Moonshot, Kimi Coding, OpenRouter, xAI, Deepgram (speech), Perplexity, ZAI, Ollama, Vllm, ModelStudio, BytePlus, VolcEngine
+**Amazon Bedrock:**
 
-**Web Search & Content:**
+- Extension: `extensions/amazon-bedrock/` (`@openclaw/amazon-bedrock-provider`)
+- SDK: `@aws-sdk/client-bedrock` ^3.1014.0 (in root `package.json`)
 
-- Brave Web Search API
-  - Auth: `BRAVE_API_KEY`
-  - Extension: `extensions/brave/`
+**Mistral:**
 
-- DuckDuckGo (built-in, no API key)
-  - Extension: `extensions/duckduckgo/`
+- Extension: `extensions/mistral/` (`@openclaw/mistral-provider`)
 
-- Perplexity API
-  - Auth: `PERPLEXITY_API_KEY` (format: `pplx-...`)
-  - Extension: `extensions/perplexity/`
+**Groq:**
 
-- Tavily Search API
-  - Extension: `extensions/tavily/`
+- Extension: `extensions/groq/` (`@openclaw/deepgram-provider` / `@openclaw/groq-provider`)
 
-- Exa Search
-  - Extension: `extensions/exa/`
+**xAI (Grok):**
 
-- FireCrawl
-  - Auth: `FIRECRAWL_API_KEY`
-  - Extension: `extensions/firecrawl/`
+- Extension: `extensions/xai/` (`@openclaw/xai-plugin`)
 
-**Voice & TTS:**
+**DeepSeek:**
 
-- ElevenLabs Text-to-Speech
-  - Auth: `ELEVENLABS_API_KEY` or `XI_API_KEY` (alias)
-  - Extension: `extensions/elevenlabs/`
-  - Library: `node-edge-tts` (Edge TTS fallback)
+- Extension: `extensions/deepseek/`
 
-- Deepgram Speech-to-Text
-  - Auth: `DEEPGRAM_API_KEY`
-  - Extension: `extensions/deepgram/`
+**Ollama (local):**
 
-**Image Generation & Processing:**
+- Extension: `extensions/ollama/` (`@openclaw/ollama-provider`)
+- Setup helpers: `src/plugin-sdk/ollama-setup.ts`
+- Auth: No key required; connects to local Ollama server
 
-- FAL AI (image generation)
-  - Extension: `extensions/fal/`
+**OpenRouter:**
 
-- image-generation runtime: `src/image-generation/`
-  - Supports: OpenAI DALL-E, Azure, custom endpoints
+- Extension: `extensions/openrouter/` (`@openclaw/openrouter-provider`)
+- Auth: `OPENROUTER_API_KEY`
+
+**Perplexity:**
+
+- Extension: `extensions/perplexity/` (`@openclaw/perplexity-plugin`)
+- Auth: `PERPLEXITY_API_KEY`
+
+**Together AI:**
+
+- Extension: `extensions/together/`
+
+**Hugging Face:**
+
+- Extension: `extensions/huggingface/`
+
+**MiniMax:**
+
+- Extension: `extensions/minimax/`
+- Auth: `MINIMAX_API_KEY`
+- Usage tracking: `src/infra/provider-usage.fetch.minimax.ts`
+
+**Venice AI:**
+
+- Extension: `extensions/venice/`
+- Models: `src/agents/venice-models.ts`
+
+**vLLM / SGLang (self-hosted):**
+
+- Extensions: `extensions/vllm/`, `extensions/sglang/`
+
+**VolcEngine / BytePlus / Kimi / Qwen / ModelStudio / Moonshot / Nvidia / Qianfan / Xiaomi / ZAI:**
+
+- Extensions under `extensions/volcengine/`, `extensions/byteplus/`, `extensions/kimi-coding/`, `extensions/qwen-portal-auth/`, `extensions/modelstudio/`, `extensions/moonshot/`, `extensions/nvidia/`, `extensions/qianfan/`, `extensions/xiaomi/`, `extensions/zai/`
+- Auth: `ZAI_API_KEY` for ZAI; others use per-extension config
+
+**AI Gateway Proxies:**
+
+- Vercel AI Gateway: `extensions/vercel-ai-gateway/`; auth: `AI_GATEWAY_API_KEY`
+- Cloudflare AI Gateway: `extensions/cloudflare-ai-gateway/`
 
 ## Messaging Channels
 
-**Core Channels (built-in):**
+All channel plugins live under `extensions/<channel>/` and `src/` for built-in channels.
 
-- **Telegram** - `src/telegram/`, `extensions/telegram/`
-  - Auth: `TELEGRAM_BOT_TOKEN`
+**Telegram:**
 
-- **Discord** - `src/discord/`, `extensions/discord/`
-  - Auth: `DISCORD_BOT_TOKEN` (raw token, no prefix)
+- Extension: `extensions/telegram/` (`@openclaw/telegram`)
+- SDK: `grammy` ^1.41.1, `@grammyjs/runner` ^2.0.3, `@grammyjs/transformer-throttler` ^1.2.1
+- Auth env: `TELEGRAM_BOT_TOKEN`
+- Bot token acquired via @BotFather; supports both polling and webhook modes
+- Webhook: configurable via gateway, handled in `extensions/telegram/src/webhook.ts`
 
-- **Slack** - `src/slack/`, `extensions/slack/`
-  - Auth: `SLACK_BOT_TOKEN` (format: `xoxb-...`), `SLACK_APP_TOKEN` (format: `xapp-...`)
+**Discord:**
 
-- **WhatsApp Web** - `src/web/`, `src/markdown/whatsapp.ts`
-  - Browser-based automation (playwright-core)
+- Extension: `extensions/discord/` (`@openclaw/discord`)
+- SDK: `@buape/carbon` 0.0.0-beta (Discord interactions), `@discordjs/voice` ^0.19.2, `discord-api-types` ^0.38.42
+- Auth env: `DISCORD_BOT_TOKEN` (raw token, no prefix)
+- Dev types: `@grammyjs/types` ^3.25.0 in root devDependencies
 
-- **Signal** - `extensions/signal/`
-  - SignalCliRest protocol integration
+**Slack:**
 
-**Channel Extensions (82 plugins, key ones):**
+- Extension: `extensions/slack/` (`@openclaw/slack`)
+- SDK: `@slack/bolt` ^4.6.0, `@slack/web-api` ^7.15.0
+- Auth env: `SLACK_BOT_TOKEN` (`xoxb-...`), `SLACK_APP_TOKEN` (`xapp-...`)
+- Mode: Socket Mode
 
-- **iMessage** - `extensions/imessage/` (macOS Bluetooth integration)
-- **LINE** - `extensions/line/` (SDK: `@line/bot-sdk` v10.6.0)
-- **Matrix** - `extensions/matrix/` (open protocol)
-- **Mattermost** - `extensions/mattermost/` + fallback env: `MATTERMOST_BOT_TOKEN`, `MATTERMOST_URL`
-- **MSTeams** - `extensions/msteams/`
-- **IRC** - `extensions/irc/` (raw IRC protocol)
-- **Twitch Chat** - `extensions/twitch/` + env: `OPENCLAW_TWITCH_ACCESS_TOKEN`
-- **Zalo** - `extensions/zalo/` (Vietnamese messaging)
-- **Zalo User** - `extensions/zalouser/` (user-mode Zalo)
-- **Voice Call** - `extensions/voice-call/`
-- **BlueBubbles** - `extensions/bluebubbles/` (iMessage relay)
-- **Tlon (Urbit)** - `extensions/tlon/`
-- **Feishu** - `extensions/feishu/` (Lark)
-- **Google Chat** - `extensions/googlechat/`
-- **NextCloud Talk** - `extensions/nextcloud-talk/`
-- **Nostr** - `extensions/nostr/` (decentralized protocol)
-- **Synology Chat** - `extensions/synology-chat/`
-- **XMPP/Chutes** - `extensions/chutes/`
+**Microsoft Teams:**
 
-## Data Storage
+- Extension: `extensions/msteams/` (`@openclaw/msteams`)
+- SDK: `@microsoft/teams.api` 2.0.5, `@microsoft/teams.apps` 2.0.5
+- Requires webhook ingress; implemented via `express`
 
-**Primary Database:**
+**Matrix:**
 
-- SQLite (Node.js native `node:sqlite` module)
-  - Location: `~/.openclaw/` (configurable via `OPENCLAW_STATE_DIR`)
-  - Vector support: `sqlite-vec` 0.1.7 for embeddings
-  - Manager: `src/memory/qmd-manager.ts`
-  - Schema: `src/memory/memory-schema.ts`
-  - Search: `src/memory/manager-search.ts`
+- Extension: `extensions/matrix/` (`@openclaw/matrix`)
+- SDK: `matrix-js-sdk` 41.2.0-rc.0, `@matrix-org/matrix-sdk-crypto-nodejs` ^0.4.0 (native build)
+- Supports end-to-end encryption via Rust crypto bindings
 
-**Session Storage:**
+**WhatsApp:**
 
-- Pi session logs: `~/.openclaw/agents/<agentId>/sessions/*.jsonl`
-- Gateway sessions: `~/.openclaw/sessions/`
+- Extension: `extensions/whatsapp/` (`@openclaw/whatsapp`)
+- SDK: `@whiskeysockets/baileys` 7.0.0-rc.9 (native WhatsApp Web protocol)
+- Auth: QR code pairing flow; session stored in state dir
 
-**File Storage:**
+**iMessage:**
 
-- Local filesystem only (no cloud storage integration)
-- Temporary paths via `openclaw/plugin-sdk/temp-path`
-- JSON store: `openclaw/plugin-sdk/json-store` (file-based)
+- Extension: `extensions/imessage/` (`@openclaw/imessage`)
+- Mechanism: macOS-only via `imsg` bridge; requires macOS host
 
-**Cache:**
+**Signal:**
 
-- In-process (no external cache service)
-- Chokidar-based file watching: `chokidar` ^5.0.0
+- Extension: `extensions/signal/` (`@openclaw/signal`)
+- Mechanism: signal-cli linked device; REST bridge required
 
-## Authentication & Identity
+**LINE:**
 
-**Gateway Auth:**
+- Extension: `extensions/line/` (`@openclaw/line`)
+- SDK: `@line/bot-sdk` ^10.6.0 (in root `package.json`)
 
-- Token-based: `OPENCLAW_GATEWAY_TOKEN` (environment variable)
-- Password-based: `OPENCLAW_GATEWAY_PASSWORD` (alternative, not simultaneously)
-- WebSocket authentication: `src/gateway/server/http-auth.ts`
+**Zalo / ZaloUser:**
 
-**External OAuth/API Keys:**
+- Extensions: `extensions/zalo/`, `extensions/zalouser/`
 
-- All provider API keys stored in `.env` or `~/.openclaw/.env`
-- Credential storage: `~/.openclaw/credentials/` (web provider creds)
-- Secret management: Direct env vars or config file entries (no vault integration)
+**Feishu (Lark):**
 
-**Device Pairing:**
+- Extension: `extensions/feishu/`
 
-- QR code generation: `qrcode-terminal` ^0.12.0 (`src/pairing/`)
-- mDNS/Bonjour support: `@homebridge/ciao` ^1.3.5
-- Extension: `extensions/device-pair/`
+**Google Chat:**
 
-## Monitoring & Observability
+- Extension: `extensions/googlechat/`
+
+**Mattermost:**
+
+- Extension: `extensions/mattermost/`
+- Auth env: `MATTERMOST_BOT_TOKEN`, `MATTERMOST_URL`
+
+**Twitch:**
+
+- Extension: `extensions/twitch/`
+- Auth env: `OPENCLAW_TWITCH_ACCESS_TOKEN` (`oauth:...`)
+
+**IRC:**
+
+- Extension: `extensions/irc/`
+- Config: `src/config/schema.irc.ts`
+
+**Nostr:**
+
+- Extension: `extensions/nostr/` (`@openclaw/nostr`)
+- SDK: `nostr-tools` ^2.23.3
+- Protocol: NIP-04 encrypted DMs
+
+**Tlon (Urbit):**
+
+- Extension: `extensions/tlon/`
+- SDK: `@tloncorp/api`, `@tloncorp/tlon-skill` (native builds)
+
+**Nextcloud Talk:**
+
+- Extension: `extensions/nextcloud-talk/`
+
+**Synology Chat:**
+
+- Extension: `extensions/synology-chat/`
+
+## Voice & Speech
+
+**ElevenLabs:**
+
+- Extension: `extensions/elevenlabs/` (`@openclaw/elevenlabs-speech`)
+- Auth env: `ELEVENLABS_API_KEY` or `XI_API_KEY` (alias)
+
+**Deepgram:**
+
+- Extension: `extensions/deepgram/` (`@openclaw/deepgram-provider`)
+- Auth env: `DEEPGRAM_API_KEY`
+
+**Microsoft Edge TTS (built-in):**
+
+- Package: `node-edge-tts` ^1.2.10 in root `package.json`
+- No API key required; uses Edge TTS free endpoint
+
+**Talk Voice:**
+
+- Extension: `extensions/talk-voice/` (no separate package.json found; integrated into core talk config)
+- Config: `src/config/talk.ts`, `src/config/talk-defaults.ts`
+
+**Voice Call:**
+
+- Extension: `extensions/voice-call/` (`@openclaw/voice-call`)
+- WebSocket-based voice call routing; published to npm
+
+## Web Search Tools
+
+**Brave Search:**
+
+- Extension: `extensions/brave/` (`@openclaw/brave-plugin`)
+- Auth env: `BRAVE_API_KEY`
+
+**Tavily:**
+
+- Extension: `extensions/tavily/` (`@openclaw/tavily-plugin`)
+- Auth env: `PERPLEXITY_API_KEY` (shared with Perplexity)... check extension for actual key
+
+**Firecrawl:**
+
+- Extension: `extensions/firecrawl/` (`@openclaw/firecrawl-plugin`)
+- Auth env: `FIRECRAWL_API_KEY`
+
+**Exa:**
+
+- Extension: `extensions/exa/` (`@openclaw/exa-plugin`)
+
+**DuckDuckGo (built-in):**
+
+- Extension: `extensions/duckduckgo/`
+- No API key required
+
+**Perplexity (web search):**
+
+- Extension: `extensions/perplexity/`
+- Auth env: `PERPLEXITY_API_KEY`
+
+**Open Prose:**
+
+- Extension: `extensions/open-prose/`
+
+## Image Generation
+
+**fal.ai:**
+
+- Extension: `extensions/fal/` (`@openclaw/fal-provider`)
+- SDK: calls fal API directly
+
+**Image generation core:**
+
+- Plugin SDK surface: `src/plugin-sdk/image-generation.ts`, `src/plugin-sdk/image-generation-core.ts`
+- Implementation: `src/image-generation/`
+
+## Memory & Persistence
+
+**SQLite (built-in memory):**
+
+- Package: `sqlite-vec` 0.1.7 - vector search extension
+- Implementation: `src/memory/sqlite-vec.ts`, `src/memory/manager.ts`
+- Storage: flat files + SQLite DB under state dir (`~/.openclaw/`)
+
+**LanceDB (long-term vector memory):**
+
+- Extension: `extensions/memory-lancedb/` (`@openclaw/memory-lancedb`)
+- SDK: `@lancedb/lancedb` ^0.27.1
+- Uses `openai` ^6.32.0 for embeddings (configurable)
+- Published to npm; installable plugin
+
+**JSON file store (core):**
+
+- Plugin SDK surface: `src/plugin-sdk/json-store.ts`
+- Sessions: `~/.openclaw/agents/<agentId>/sessions/*.jsonl`
+- Config: `~/.openclaw/openclaw.json`
+- Credentials: `~/.openclaw/credentials/`
+
+## Observability & Monitoring
+
+**OpenTelemetry:**
+
+- Extension: `extensions/diagnostics-otel/` (`@openclaw/diagnostics-otel`)
+- SDK: Full OTel stack - `@opentelemetry/sdk-node`, trace/metrics/logs exporters (OTLP proto)
+- Exports to any OTel-compatible backend (configurable endpoint)
+- Published to npm
 
 **Logging:**
 
-- `tslog` ^4.10.2 - Structured logging with levels
-- Channel-specific: `src/channels/logging.ts`
-- Log exports/templates: `src/terminal/` (ANSI formatting)
+- Core: `tslog` ^4.10.2 - structured logging library (`src/logger.ts`)
+- macOS unified logs: `scripts/clawlog.sh` reads via `/usr/bin/log` subsystem
 
-**Error Tracking:**
+**Push Notifications (APNS):**
 
-- None detected (no Sentry, Bugsnag, etc.)
-- Error handling via try-catch and validation (Zod)
-- Test error fixtures: `src/agents/live-model-errors.ts`
+- Implementation: `src/infra/push-apns.ts`, `src/infra/push-apns.relay.ts`
+- Protocol: Apple Push Notification Service for iOS/macOS app
 
-**Diagnostics:**
+## Networking & Discovery
 
-- OpenTelemetry support: `extensions/diagnostics-otel/`
-- Config schema validation: `src/agents/models-config.ts`
-- System prompt reporting: `src/agents/system-prompt-report.ts`
+**Bonjour/mDNS:**
+
+- Package: `@homebridge/ciao` ^1.3.5
+- Implementation: `src/infra/bonjour*.ts`
+- Used for local network gateway discovery
+
+**Tailscale:**
+
+- Implementation: `src/infra/tailscale.ts`, `src/infra/tailnet.ts`
+- Gateway can bind to Tailscale network interface; config: `src/config/config.gateway-tailscale-bind.test.ts`
+
+**SSH Tunneling:**
+
+- Implementation: `src/infra/ssh-tunnel.ts`, `src/infra/ssh-config.ts`
+- Used for remote gateway access
+
+## Platform & Agent Protocols
+
+**Model Context Protocol (MCP):**
+
+- SDK: `@modelcontextprotocol/sdk` 1.27.1
+- Config: `src/config/mcp-config.ts`
+- MCP server/tool integration in agent pipeline
+
+**Agent Client Protocol (ACP):**
+
+- SDK: `@agentclientprotocol/sdk` 0.16.1
+- Entry: `extensions/acpx/`
+- Implementation: `src/acp/`, `src/plugin-sdk/acp-runtime.ts`
+
+**Pi Agent (embedded):**
+
+- SDK: `@mariozechner/pi-agent-core` 0.61.1, `@mariozechner/pi-ai` 0.61.1, `@mariozechner/pi-coding-agent` 0.61.1, `@mariozechner/pi-tui` 0.61.1
+- Implementation: `src/agents/pi-embedded-runner/`
+
+## Authentication & Identity
+
+**Custom token/password auth:**
+
+- Gateway auth: bearer token (`OPENCLAW_GATEWAY_TOKEN`) or password (`OPENCLAW_GATEWAY_PASSWORD`)
+- Implementation: `src/gateway/auth.ts`, `src/gateway/auth-config-utils.ts`
+- Device pairing: `src/infra/device-pairing.ts`, `src/infra/pairing-token.ts`
+- Credentials stored: `~/.openclaw/credentials/`
+
+**Provider OAuth / API key flows:**
+
+- API key auth: `src/plugin-sdk/provider-auth-api-key.ts`
+- Login-based auth: `src/plugin-sdk/provider-auth-login.ts`
+- Google auth: `src/infra/gemini-auth.ts`
 
 ## CI/CD & Deployment
 
-**Source Control:**
-
-- GitHub: `https://github.com/openclaw/openclaw`
-
 **Hosting:**
 
-- CLI: npm package (`openclaw`)
-- macOS app: Distributed via Sparkle updates (`appcast.xml`)
-- Installers: Sibling repo `../openclaw.ai` (`public/install.sh`, `install-cli.sh`, `install.ps1`)
-- Gateway runs locally or on VM (exe.dev infrastructure mentioned in docs)
+- Render.com (via `render.yaml`): Docker runtime, web service, 1 GB persistent disk
+- Fly.io (via `fly.toml`): Docker runtime, `shared-cpu-2x`, 2 GB RAM, persistent `/data` volume
+- Self-hosted Docker (via `docker-compose.yml`): gateway + CLI containers, ports 18789/18790
 
 **CI Pipeline:**
 
-- GitHub Actions (referenced in test configs)
-- Pre-commit hooks: Oxlint, Oxfmt, TypeScript checks (`prek install`)
+- GitHub Actions (`.github/` directory; workflows not directly read but referenced by `labeler.yml`)
+- Pre-commit hooks: `prek install` (same checks as CI); hooks in `git-hooks/`
 
-**Build Artifacts:**
+**Mobile:**
 
-- `dist/` - Built JavaScript (ESM modules)
-- Binary: `openclaw.mjs` (CLI entry point)
-- Docs: Generated in `docs/.generated/`
-- SDK API: Plugin SDK baseline in `docs/.generated/`
-
-## Environment Configuration
-
-**Required env vars (conditional on enabled features):**
-
-- `OPENCLAW_GATEWAY_TOKEN` - Gateway auth (recommended for non-loopback)
-- `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` or `GEMINI_API_KEY` - At least one LLM
-- `TELEGRAM_BOT_TOKEN` - For Telegram channel
-- `DISCORD_BOT_TOKEN` - For Discord channel
-- `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN` - For Slack channel
-
-**Optional overrides:**
-
-- `OPENCLAW_STATE_DIR` - Config/session directory (default: `~/.openclaw`)
-- `OPENCLAW_CONFIG_PATH` - Config file path (default: `~/.openclaw/openclaw.json`)
-- `OPENCLAW_HOME` - Home directory (default: `~`)
-- `OPENCLAW_LOAD_SHELL_ENV` - Import env from login shell
-- `OPENCLAW_LOAD_SHELL_ENV_TIMEOUT_MS` - Shell env load timeout (default: 15000)
-
-**Secrets Location:**
-
-- Environment files: `.env` (local dev) or `~/.openclaw/.env` (daemon mode)
-- Config file: `~/.openclaw/openclaw.json` (yaml or json5)
-- Never committed (covered by `.gitignore` and `detect-secrets`)
+- iOS: Xcode/xcodegen, App Store/TestFlight distribution via `scripts/ios-beta-release.sh`
+- Android: Gradle, Play Store AAB via `scripts/build-release-aab.ts`
+- macOS: Sparkle auto-update via `appcast.xml`
 
 ## Webhooks & Callbacks
 
-**Incoming:**
+**Incoming Webhooks:**
 
-- Channel-specific webhook endpoints (Telegram, Discord, Slack, LINE, etc.)
-- `src/channels/web/` - Web channel transport
-- `src/routing/` - Message routing and handling
+- Telegram: `/webhook` endpoint via `extensions/telegram/src/webhook.ts`; registered with Telegram Bot API
+- Microsoft Teams: HTTP webhooks via Teams SDK (`extensions/msteams/`)
+- LINE: webhook endpoint via `@line/bot-sdk`
+- General webhook ingress: `src/plugin-sdk/webhook-ingress.ts`, `src/plugin-sdk/webhook-path.ts`
 
-**Outgoing:**
+**Outgoing Webhooks / Hooks:**
 
-- Auto-reply hooks: `src/auto-reply/`
-- Custom webhook support: `openclaw/plugin-sdk/webhook-path`
-- Channel send result tracking: `openclaw/plugin-sdk/channel-send-result`
+- Agent hooks system: `src/hooks/`, configurable in `openclaw.json` `hooks` block
+- MCP tool calls go outbound to configured MCP servers
 
-## Tool Integration
+## Environment Configuration
 
-**Agent Tools Runtime:**
+**Required for operation (one provider minimum):**
 
-- Model context protocol (MCP) SDK support: `@modelcontextprotocol/sdk` 1.27.1
-- Tool execution: `src/agents/pi-tools.*.test.ts` (tool filtering, gating, etc.)
-- Tool images: `src/agents/tool-images.test.ts` (image rendering in tool context)
-- WhatsApp-specific gating: `src/agents/pi-tools.whatsapp-login-gating.test.ts`
+- `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, or `GEMINI_API_KEY`
 
-**Browser & Automation:**
+**Gateway auth (recommended if binding beyond loopback):**
 
-- Playwright headless browser: `playwright-core` 1.58.2
-- Navigation guard: `src/browser/pw-session.create-page.navigation-guard.ts`
-- Screenshot support: `src/browser/screenshot.test.ts`
+- `OPENCLAW_GATEWAY_TOKEN`
+
+**Channel tokens (per enabled channel):**
+
+- `TELEGRAM_BOT_TOKEN`, `DISCORD_BOT_TOKEN`, `SLACK_BOT_TOKEN` + `SLACK_APP_TOKEN`
+
+**Optional tool/service keys:**
+
+- `BRAVE_API_KEY`, `PERPLEXITY_API_KEY`, `FIRECRAWL_API_KEY`, `ELEVENLABS_API_KEY`, `DEEPGRAM_API_KEY`
+
+**Secrets location:**
+
+- Runtime secrets in `~/.openclaw/credentials/`
+- Config with inline secrets: `~/.openclaw/openclaw.json`
+- Env file: `~/.openclaw/.env` or `./.env` (see `.env.example` for full list)
 
 ---
 
-_Integration audit: 2026-03-26_
+_Integration audit: 2026-03-28_

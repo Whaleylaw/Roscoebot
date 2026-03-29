@@ -1,251 +1,209 @@
 # Architecture
 
-**Analysis Date:** 2026-03-26
+**Analysis Date:** 2026-03-28
 
 ## Pattern Overview
 
-**Overall:** Multi-layered gateway/agent platform with extensible channel integrations, modular plugin system, and separate CLI/runtime separation patterns.
+**Overall:** Plugin-based multi-channel AI gateway
 
 **Key Characteristics:**
 
-- **Layered separation**: CLI entry points, business logic, channel transports, and infrastructure layers
-- **Plugin-based extensibility**: Extensions (plugins) live under `extensions/*` with standardized SDK contracts
-- **Agent-centric**: Core abstracts agent execution, command processing, and session management
-- **Channel abstraction**: Multiple messaging channels (Discord, Telegram, WhatsApp, Signal, etc.) share common interfaces
-- **Runtime boundaries**: `.runtime.ts` and `.setup.ts` files mark setup-time vs. runtime code separation
+- A central gateway server (`src/gateway/`) brokers messages between messaging channels and AI providers via a plugin registry
+- All channel integrations are implemented as plugins (`extensions/*`) loaded at runtime against the Plugin SDK contract
+- An inbound message triggers routing → session resolution → agent dispatch → reply pipeline → outbound send
+- CLI (`src/cli/`) and gateway runtime are distinct entry points sharing the same config and session layers
+- Lazy-loading (`*.runtime.ts` boundaries) keeps startup lean and prevents module-singleton collisions
 
 ## Layers
 
-**Entry Point / CLI Layer:**
+**CLI Layer:**
 
-- Purpose: Process initialization, argument parsing, container detection, profile management, version checking
-- Location: `src/entry.ts`, `src/index.ts`, `src/cli/run-main.ts`
-- Contains: CLI command routing, argument normalization, error handling, process setup
-- Depends on: Infra (env, paths, process), CLI utilities, config loading
-- Used by: Node.js entry wrapper (`openclaw.mjs`)
+- Purpose: Parse user commands and dispatch to gateway RPC or local side-effects
+- Location: `src/cli/`
+- Contains: Command modules per sub-command (`src/cli/program/register.*.ts`), option parsers, progress UI
+- Depends on: `src/config/`, `src/gateway/` (via RPC), `src/channels/`, `src/commands/`
+- Used by: `src/entry.ts` (main binary entrypoint)
 
-**CLI Command Layer:**
+**Gateway Server Layer:**
 
-- Purpose: Handle user commands (gateway, agent, config, onboarding, browser, etc.)
-- Location: `src/cli/route.ts` (routing), individual `*-cli.ts` files for command handlers
-- Contains: Command-specific logic, argument handling, output formatting
-- Depends on: Config, agents, channels, plugins
-- Used by: Entry/main process
+- Purpose: Central runtime — owns HTTP/WS server, channel lifecycle, session management, and plugin services
+- Location: `src/gateway/`
+- Contains: `server.impl.ts` (startup orchestration), `server-http.ts` (HTTP/WS handler), `server-channels.ts` (channel lifecycle manager), `server-startup.ts`, `server-methods/` (RPC dispatch)
+- Depends on: `src/channels/`, `src/plugins/`, `src/agents/`, `src/config/`, `src/routing/`
+- Used by: `src/entry.ts`, `src/cli/gateway-cli.ts`
 
-**Configuration / State Layer:**
+**Channel Plugin Layer:**
 
-- Purpose: Load, validate, serialize, and manage application state (config files, sessions, secrets)
-- Location: `src/config/` (schemas, I/O, validation), `src/config/sessions/` (session storage)
-- Contains: YAML/JSON parsing, schema validation (Zod), environment substitution, legacy migrations
-- Depends on: Infra (file I/O, paths), types, utils
-- Used by: All runtime layers
+- Purpose: Adapter contract between a messaging platform and core dispatch logic
+- Location: `extensions/<channel-id>/src/` (runtime code), `src/channels/plugins/` (type contracts)
+- Contains: Per-channel plugin implementing `ChannelPlugin<ResolvedAccount, Probe, Audit>` with adapters for lifecycle, messaging, setup, outbound, pairing, etc.
+- Depends on: `openclaw/plugin-sdk/*` subpaths only (not `src/**` directly)
+- Used by: Gateway channel lifecycle manager at runtime via plugin registry
 
-**Auto-reply / Conversation Layer:**
+**Routing Layer:**
 
-- Purpose: Message routing, command dispatch, agent execution, and reply generation
-- Location: `src/auto-reply/` (command detection, registry, execution), `src/auto-reply/reply/` (reply generation)
-- Contains: Command validation, command execution context, agent invocation, chunk handling, template rendering
-- Depends on: Config, agents, routing, channels, plugins
-- Used by: Channel handlers, daemon/gateway processes
+- Purpose: Map an inbound `(channel, accountId, peer)` tuple to a session key and agent ID
+- Location: `src/routing/`
+- Contains: `resolve-route.ts` (main routing function), `bindings.ts`, `session-key.ts`, `account-lookup.ts`
+- Depends on: `src/config/`
+- Used by: Channel inbound dispatch (`src/auto-reply/dispatch.ts`, channel plugin inbound handlers)
 
-**Agents / Execution Layer:**
+**Agent / AI Execution Layer:**
 
-- Purpose: Spawn and manage AI agent processes (ACPs), tool execution, streaming, patch application
-- Location: `src/agents/` (main agent commands, spawning, streaming, patching)
-- Contains: ACP process spawning, tool invocation, streaming response handling, Anthropic/vendor integration
-- Depends on: Config, sandbox, plugins, infra (processes, TLS, network)
-- Used by: Auto-reply, commands, tools
+- Purpose: Run the LLM turn — maintain conversation context, invoke tools, stream reply
+- Location: `src/agents/`
+- Contains: `pi-embedded-runner/` (embedded agent execution), `tools/` (tool definitions), `auth-profiles/` (provider credential resolution), `skills/` (skill loader), `sandbox/` (execution sandbox)
+- Depends on: `src/plugins/` (provider plugins), `src/config/`, `src/memory/`
+- Used by: `src/auto-reply/reply/` (reply dispatcher), gateway node invoke endpoints
 
-**Channel / Transport Layer:**
+**Auto-Reply / Dispatch Layer:**
 
-- Purpose: Abstract inbound/outbound messaging across multiple platforms
-- Location: `src/channels/` (core abstraction), individual channel directories under `extensions/*/src/`
-- Contains: Channel lifecycle, account management, inbound message normalization, outbound serialization
-- Depends on: Config, routing, auto-reply, plugins (for extension channels)
-- Used by: Gateway daemon, CLI message send commands
+- Purpose: Receive a finalized inbound context, gate it (commands, allowlists), and coordinate the reply lifecycle
+- Location: `src/auto-reply/`
+- Contains: `dispatch.ts` (main entry), `reply/` (dispatcher, queue, exec, commands), `commands-registry.ts`, `templating.ts`
+- Depends on: `src/agents/`, `src/channels/`, `src/routing/`, `src/config/`
+- Used by: Channel plugin inbound handlers and gateway WebSocket message events
 
-**Plugin SDK / Extensibility:**
+**Plugin SDK Layer:**
 
-- Purpose: Public API for extensions to integrate custom channels, providers, tools, and hooks
-- Location: `src/plugin-sdk/` (barrel exports and contracts), `extensions/*/src/` (extension implementations)
-- Contains: Channel setup/runtime contracts, provider setup, config helpers, allowlist management, routing helpers
-- Depends on: Core types, config schema contracts
-- Used by: Extension packages, core runtime (loads and wires extensions)
+- Purpose: Stable public API surface for extensions; re-exports selected core internals under versioned subpaths
+- Location: `src/plugin-sdk/`
+- Contains: Barrel re-exports organized by subpath (e.g. `channel-lifecycle.ts`, `channel-inbound`, `routing`, `config-runtime`, etc.)
+- Depends on: Core `src/**` internals (re-exports only)
+- Used by: All `extensions/*` production code via `openclaw/plugin-sdk/<subpath>`
 
-**Routing / Session Management:**
+**Plugin Registry / Runtime Layer:**
 
-- Purpose: Determine message destination (account, channel, agent) based on sender and config rules
-- Location: `src/routing/resolve-route.ts`, `src/routing/session-key.ts`, `src/routing/account-id.ts`
-- Contains: Route resolution logic, session key derivation, account lookup, allowlist enforcement
-- Depends on: Config, channels, utils
-- Used by: Auto-reply, inbound channel handlers
+- Purpose: Load, validate, and register plugins; expose a unified runtime API to plugins at execution time
+- Location: `src/plugins/`
+- Contains: `registry.ts` (registration), `runtime/index.ts` (PluginRuntime factory), `loader.ts`, `types.ts`, `services.ts`
+- Depends on: `src/channels/`, `src/agents/`, `src/hooks/`, `src/memory/`
+- Used by: Gateway server (`server.impl.ts`, `server-plugins.ts`)
 
-**Memory / Knowledge Base:**
+**Config Layer:**
 
-- Purpose: Store and retrieve conversation history, embeddings, and vector search
-- Location: `src/memory/` (backend config, batch embedding, search managers)
-- Contains: Backend configuration (OpenAI, Gemini, local), batch processing, similarity search
-- Depends on: Config, providers, infra (HTTP, processes)
-- Used by: Auto-reply context building, agents (via context)
+- Purpose: Load, validate, migrate, and cache the YAML/JSON5 config file; expose typed snapshots
+- Location: `src/config/`
+- Contains: `io.ts` (file I/O), `types.ts` (schema types), `validation.ts`, `paths.ts`, `sessions.ts`, `legacy-migrate.ts`
+- Depends on: Nothing in `src/` (pure FS + type layer)
+- Used by: Nearly every other layer
 
-**Browser / Automation Layer:**
+**Infra Layer:**
 
-- Purpose: Control Chrome/Playwright for web automation, screenshot capture, state management
-- Location: `src/browser/` (Chrome launch, Playwright sessions, CDP proxy, client actions)
-- Contains: Chrome executable detection, profile management, Playwright session pooling, CDP forwarding, client action execution
-- Depends on: Config, infra (paths, processes, ports)
-- Used by: Browser CLI commands, agent tools
-
-**Plugins / Runtime:**
-
-- Purpose: Load and initialize channel and provider plugins at startup
-- Location: `src/plugins/runtime/` (plugin loading, runtime initialization)
-- Contains: Plugin resolution, channel instantiation, provider registration
-- Depends on: Config, plugin-sdk, extensions
-- Used by: Gateway daemon, CLI initialization
-
-**Infrastructure / Utilities:**
-
-- Purpose: Cross-cutting services (file I/O, process management, networking, error handling, logging)
-- Location: `src/infra/` (core utilities), `src/shared/` (shared algorithms), `src/utils/` (app-specific helpers)
-- Contains: Archive handling, Bonjour discovery, backup/restore, environment setup, error formatting, network utilities
-- Depends on: Standard library, npm packages
-- Used by: All layers
+- Purpose: Cross-cutting utilities — env, backoff, archive, binaries, bonjour, path helpers, restart, secrets runtime, etc.
+- Location: `src/infra/`
+- Contains: ~430 files covering env normalization, error formatting, machine identity, heartbeat, skills-remote, update-startup, and more
+- Depends on: Node.js built-ins, no circular deps with higher layers
+- Used by: All layers above
 
 ## Data Flow
 
-**Inbound Message (Channel -> Reply):**
+**Inbound Message (e.g. Telegram → LLM reply):**
 
-1. Channel receives external message (webhook, polling, stream)
-2. Channel normalizes to `ChannelInbound` contract via transport/adapter
-3. `routing/resolve-route.ts` determines target account/channel/agent from config rules
-4. `auto-reply/dispatch.ts` routes to command dispatcher or auto-reply handler
-5. `auto-reply/commands-registry.ts` matches command or triggers agent
-6. `auto-reply/reply/agent-runner-execution.ts` spawns ACP (Anthropic Control Plane process)
-7. Agent executes with tools, memory context, and response streaming
-8. Chunk handler (`auto-reply/chunk.ts`) processes output chunks (text, tool calls)
-9. Tools executed, results streamed back to agent (if needed)
-10. Final reply generated via `auto-reply/templating.ts`
-11. Channel adapter serializes reply and sends outbound (via `channels/*/outbound`)
+1. Channel plugin receives webhook/polling event (e.g. `extensions/telegram/src/bot-handlers.runtime.ts`)
+2. Plugin resolves account, applies allow-from + allowlist gating (`src/channels/plugins/allowlist-match.ts`)
+3. Plugin calls `dispatchInboundMessage` or `dispatchInboundMessageWithBufferedDispatcher` (`src/auto-reply/dispatch.ts`)
+4. Dispatch layer resolves route via `resolveAgentRoute` (`src/routing/resolve-route.ts`) → gets `sessionKey` + `agentId`
+5. Dispatch runs command detection; if a native command matches, it executes and returns early
+6. For AI turns, a `ReplyDispatcher` is created and the embedded pi-agent is run (`src/agents/pi-embedded-runner/`)
+7. Streaming tokens are fed through `DraftStreamLoop` (`src/channels/draft-stream-loop.ts`) to the channel's streaming adapter
+8. Final reply is sent via the channel's outbound adapter; session transcript is persisted
 
-**Configuration Load (Start -> Ready):**
+**Outbound Send (CLI `message send`):**
 
-1. `src/entry.ts` initializes process, sets environment
-2. `src/cli/run-main.ts` determines primary command
-3. Command loads config via `src/config/io.ts` → `loadConfig()`
-4. `io.ts` reads YAML, applies env substitution, validates against schema
-5. Legacy migrations applied if needed (`legacy.migrations.ts`)
-6. Config passed to command handler or daemon
-7. Daemon initializes: channels, plugins, agent pool, memory backends
-8. `src/plugins/runtime/` registers all installed plugins
-9. Channels instantiate with runtime config
-10. Gateway waits for inbound messages
+1. CLI `send` command resolves target via `src/cli/outbound-send-mapping.ts`
+2. Lazy-loads per-channel send runtime (`src/cli/send-runtime/<channel>.ts`)
+3. Calls channel's `sendMessage` with resolved account + recipient
 
-**Plugin Loading (Init -> Ready):**
+**Plugin Registration (gateway startup):**
 
-1. Config references plugin IDs in `plugins:` section
-2. `src/config/plugin-auto-enable.ts` auto-enables based on channel requirements
-3. `src/plugins/runtime/` resolves plugin packages from `extensions/*/`
-4. Each plugin exports `setup.ts` for config-time validation
-5. Each plugin exports `.runtime.ts` for startup services
-6. Plugin's channel (if any) registered in global channel map
-7. Plugin's tools/providers made available to agents
-8. Plugin's hooks registered in event system
+1. `startGatewayServer` (`src/gateway/server.impl.ts`) calls `loadOpenClawPlugins`
+2. Plugin loader discovers bundled plugins from `dist-runtime/extensions/` and user-installed plugins
+3. Each plugin's `openclaw.plugin.json` is read; the plugin entry is dynamically imported
+4. Plugin calls `api.channel.register(...)` / `api.provider.register(...)` etc. against the Plugin Registry (`src/plugins/registry.ts`)
+5. Gateway channel manager (`src/gateway/server-channels.ts`) starts each registered channel account with backoff
+
+**State Management:**
+
+- Config: loaded from `~/.openclaw/config.json5`; runtime snapshot cached in memory and refreshed on file change via `server-startup.ts` reload handlers
+- Sessions: append-only JSONL files under `~/.openclaw/agents/<agentId>/sessions/`
+- Channel runtime state: held in a `ChannelRuntimeStore` Map in the gateway process (no persistence)
 
 ## Key Abstractions
 
-**Channel Interface:**
+**ChannelPlugin:**
 
-- Purpose: Abstract message send/receive across platforms
-- Examples: `extensions/discord/src/channel.ts`, `extensions/telegram/src/channel.ts`, `src/channels/web/`
-- Pattern: Implement `setup.ts` and `channel.runtime.ts` exports; handle inbound normalization and outbound serialization
+- Purpose: Full adapter contract a messaging channel must implement
+- Examples: `extensions/telegram/src/bot.ts`, `extensions/discord/src/discord.ts`, `extensions/slack/src/slack.ts`
+- Pattern: Export default implementing `ChannelPlugin<ResolvedAccount, Probe, Audit>` with named adapter objects
 
-**Account / Config Presence:**
+**OpenClawPluginApi (plugin registration API):**
 
-- Purpose: Represent authenticated connection to external service
-- Examples: Discord guild + bot token, Telegram chat ID, WhatsApp phone number
-- Pattern: Config defines accounts under `channels.<id>.accounts`, tools access via `accountId` resolution
+- Purpose: Injected `api` object passed to each plugin's entry function; used to register channels, providers, CLI commands, hooks, tools
+- Examples: `src/plugins/registry.ts` (implementation), `src/plugins/types.ts` (type)
+- Pattern: `api.channel.register(plugin)`, `api.provider.register(providerPlugin)`, `api.cli.register(registrar)`
 
-**Inbound / Outbound Contracts:**
+**PluginRuntime:**
 
-- Purpose: Normalize cross-channel message structure
-- Location: `src/channels/plugins/contracts/`
-- Pattern: Extensions normalize native platform messages to `ChannelInbound`, outbound converts replies to platform format
+- Purpose: Runtime services injected into plugin execution context (agent, channel, config, tools, media, tts, etc.)
+- Examples: `src/plugins/runtime/index.ts` (factory), `src/plugins/runtime/types.ts` (type)
+- Pattern: Lazy-loaded facade; `createLazyRuntimeMethod` wraps each capability so the heavy module is only loaded when first called
 
-**Agent / Command Execution:**
+**ReplyDispatcher:**
 
-- Purpose: Represent an AI execution context with tools, memory, and streaming
-- Location: `src/agents/acp-spawn.ts` (spawning), `src/agents/agent-command.ts` (command context)
-- Pattern: CLI or channel invokes agent with message/system prompt; handles tool calls via streaming
+- Purpose: Manages reply lifecycle — buffering, typing indicators, concurrency, streaming updates
+- Examples: `src/auto-reply/reply/reply-dispatcher.ts`
+- Pattern: Created per inbound message; `markComplete()` + `waitForIdle()` on every exit path (enforced by `withReplyDispatcher`)
 
-**Session Key / Route Resolution:**
+**DraftStreamLoop:**
 
-- Purpose: Derive stable session ID from message sender/channel/account
-- Location: `src/routing/session-key.ts`, `src/routing/resolve-route.ts`
-- Pattern: Hash sender ID + channel + account to get session key; used for memory continuity and allowlist lookup
+- Purpose: Throttled streaming message updater for channels that support live-edit
+- Examples: `src/channels/draft-stream-loop.ts`
+- Pattern: Call `update(text)` on each token chunk; call `flush()` + `stop()` when complete
 
 ## Entry Points
 
-**CLI Entry (`src/entry.ts` → `src/index.ts`):**
+**Binary Entry (`openclaw.mjs` → `dist/entry.js`):**
 
-- Location: `src/entry.ts` (shell check guard), `src/index.ts` (library export)
-- Triggers: Node.js executable, or package import
-- Responsibilities: Process title setup, compile cache, env normalization, respawn logic, CLI routing
+- Location: `src/entry.ts`
+- Triggers: `openclaw <command>` invocations
+- Responsibilities: Profile/env setup, respawn logic (container / profile switch), then delegates to `runCli`
 
-**Gateway Daemon (CLI `gateway run`):**
+**CLI Runner:**
 
-- Location: `src/cli/daemon-cli/`
-- Triggers: `openclaw gateway run [options]`
-- Responsibilities: Bind to port, load all channels, listen for inbound, manage agent pool, serve control UI
+- Location: `src/cli/run-main.ts`
+- Triggers: Called from `src/entry.ts` after env setup
+- Responsibilities: Build Commander program, register sub-commands, parse argv, execute matched command
 
-**Agent Command Spawning (Internal):**
+**Gateway Server Start:**
 
-- Location: `src/agents/acp-spawn.ts`, `src/auto-reply/reply/agent-runner-execution.ts`
-- Triggers: Auto-reply handler, CLI `agent` command
-- Responsibilities: Spawn child process, manage streams, execute tools, collect output
+- Location: `src/gateway/server.impl.ts` (`startGatewayServer`)
+- Triggers: `openclaw gateway run` CLI command or programmatic import
+- Responsibilities: Load config, load plugins, start HTTP/WS server, start channel runtimes, wire health monitor and cron
 
-**Web UI Server (`src/browser/server.ts`):**
+**Library Export (`dist/index.js`):**
 
-- Location: `src/browser/server.ts`, `src/browser/routes/`
-- Triggers: Browser CLI commands or gateway integration
-- Responsibilities: Serve control UI, handle browser session management, proxy CDP connections
+- Location: `src/index.ts`
+- Triggers: `import "openclaw"` from external code or macOS app
+- Responsibilities: Lazy-load and re-export selected helper functions for programmatic use
 
 ## Error Handling
 
-**Strategy:** Graceful degradation with detailed error context and logging
+**Strategy:** Structured error propagation with per-layer recovery; channels restart with exponential backoff on crash
 
 **Patterns:**
 
-- **Top-level handlers**: `src/index.ts` installs uncaught exception handler; `src/entry.ts` catches respawn errors
-- **Config validation**: Schema validation via Zod; issues formatted with field paths and suggestions
-- **Channel errors**: Inbound handler catches and logs; outbound failures trigger retry or fallback
-- **Agent errors**: ACP stream errors captured; partial response sent if available
-- **Tool errors**: Tool execution wrapped in try-catch; error passed to agent for recovery
-- **Port conflicts**: `src/infra/ports.ts` detects and suggests alternatives
-- **Memory errors**: Batch processing handles failures per-item; continues on partial success
+- Channel lifecycle: `CHANNEL_RESTART_POLICY` backoff in `src/gateway/server-channels.ts`; up to `MAX_RESTART_ATTEMPTS = 10` before giving up
+- Reply dispatch: `withReplyDispatcher` ensures dispatcher cleanup even on exception
+- Gateway startup: Non-fatal plugin load errors are logged but do not abort startup
+- CLI: Exit-code-aware error formatter via `src/infra/errors.ts` (`formatUncaughtError`)
 
 ## Cross-Cutting Concerns
 
-**Logging:**
-
-- `src/logging.ts` provides `console` capture and per-level filtering
-- Channels may log via environment (e.g., `OPENCLAW_DISCORD_LOG`)
-- CLI flags control verbosity; daemon config specifies log output
-
-**Validation:**
-
-- Entry point normalizes argv, detects container vs. host, profiles
-- Config validation centralized in `src/config/validation.ts` and Zod schemas
-- Plugin schemas validated at load time via SDK contracts
-- Command arguments validated per-command
-
-**Authentication:**
-
-- Secrets stored in config under `secrets:` section
-- Env substitution allows runtime override
-- API keys masked in logs via `src/utils/mask-api-key.ts`
-- Web UI auth handled via `src/browser/control-auth.ts`
+**Logging:** `src/logger.ts` / `src/logging/subsystem.ts` — `createSubsystemLogger(name)` returns a tagged logger; piped through `src/logging/` aggregation
+**Validation:** Config validated via JSON Schema + custom validators in `src/config/validation.ts`; plugin registration validated in `src/plugins/registry.ts`
+**Authentication:** Gateway HTTP auth via `src/gateway/auth.ts`; channel pairing via `src/channels/plugins/` pairing adapters; device pair tokens in `extensions/device-pair/`
 
 ---
 
-_Architecture analysis: 2026-03-26_
+_Architecture analysis: 2026-03-28_

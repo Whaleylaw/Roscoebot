@@ -1,265 +1,342 @@
 # Codebase Concerns
 
-**Analysis Date:** 2026-03-26
-
-## Tech Debt
-
-**Large Monolithic Files:**
-
-- Issue: Several files exceed 2000 lines without clear separation of concerns, making them difficult to navigate, test, and maintain
-- Files:
-  - `src/agents/pi-embedded-runner/run/attempt.ts` (3234 lines) - Core agent runtime orchestration
-  - `src/config/io.ts` (2120 lines) - Config loading and validation pipeline
-  - `src/memory/qmd-manager.ts` (2076 lines) - Memory/QMD management
-  - `src/plugins/types.ts` (2049 lines) - Plugin type definitions
-  - `src/config/schema.base.generated.ts` (16294 lines) - Generated schema (less critical)
-- Impact: Increased cognitive load for contributors, slower test/build cycles, risk of side effects when refactoring
-- Fix approach: Break large files into smaller modules with clear responsibilities (e.g., `attempt-setup.ts`, `attempt-execution.ts`, `attempt-cleanup.ts` for `attempt.ts`)
-
-**Type Safety Issues with `as any`:**
-
-- Issue: 120+ instances of `as any` casts throughout the codebase bypass TypeScript type checking
-- Files: `src/gateway/server.auth.shared.ts`, `src/gateway/tools-invoke-http.ts`, `src/gateway/client.ts`, and others
-- Impact: Loss of compile-time safety, risk of runtime type errors, harder to track down bugs
-- Fix approach: Replace `as any` with proper type guards, conditional types, or refactored APIs that maintain type safety
-
-**Circular Import Risk in Bootstrap:**
-
-- Issue: `src/agents/subagent-registry.ts` uses `var` instead of `const` to avoid Temporal Dead Zone (TDZ) during circular imports
-- Files: `src/agents/subagent-registry.ts` (line 63+ comment)
-- Impact: Indicates fragile import ordering; future refactors could break if not handled carefully
-- Fix approach: Refactor import structure to eliminate circular dependency or use explicit lazy-loading boundaries
-
-**ESLint/Type Suppressions:**
-
-- Issue: 70+ instances of `eslint-disable` and `@ts-expect-error` comments scattered throughout
-- Notable patterns: `no-console` (debug logging), `no-await-in-loop` (batching patterns), `no-control-regex` (string validation)
-- Impact: Each suppression masks a lint violation; indicates patterns that should be formalized or extracted to utilities
-- Fix approach: Consolidate `console` usage into subsystem logger wrappers, extract control-regex validation into dedicated function
-
-## Known Bugs
-
-**Typing Loop Race Condition (#37 typing-persistence.test.ts):**
-
-- Symptoms: Typing loop may call `onReplyStart` again after run completes, causing duplicate UI state updates
-- Files: `src/auto-reply/reply/typing-persistence.test.ts:37-40`
-- Trigger: When `startTypingLoop()` is called, the run completes, but the typing interval fires before both `markRunComplete()` and `markDispatchIdle()` are set
-- Status: Test documents the expected behavior; verify implementation in `src/auto-reply/reply/` handles both completion flags correctly before restarting
-
-**Cron Model Override Persistence (#21057 in run.cron-model-override.test.ts):**
-
-- Symptoms: When a cron run fails, `sessionEntry.model` remains undefined, causing fallback to agent default instead of cron-specified model
-- Files: `src/cron/isolated-agent/run.cron-model-override.test.ts:125-128`
-- Trigger: Cron run throws in catch block before post-run telemetry writes the intended model to session entry
-- Workaround: Model must be persisted during pre-run setup, not just in post-run block
-- Status: Test added to ensure model is written at pre-run persist time
-
-**Blockquote Spacing in Markdown IR (#3952 in text/reasoning-tags.test.ts):**
-
-- Symptoms: Blockquote with multiple newlines renders with incorrect spacing (triple newline becomes quad)
-- Files: `src/markdown/ir.blockquote-spacing.test.ts:39`
-- Cause: `blockquote_close` token adds extra newline; Markdown-it parser behavior
-- Workaround: Filter out extra newlines during blockquote rendering
-- Status: Test documents expected behavior
-
-## Security Considerations
-
-**Dangerous Environment Variables in Subprocess Execution:**
-
-- Risk: Subprocess execution can inherit dangerous env vars (e.g., `LD_DEBUG`, `LD_PRELOAD`) that allow privilege escalation or code injection
-- Files: `src/agents/bash-tools.exec.path.test.ts:226-228`, `src/agents/bash-tools.process.ts` (subprocess spawning)
-- Current mitigation: Allowlist-based sanitization of env vars passed to subprocesses
-- Recommendations:
-  - Keep allowlist updated as new dangerous patterns emerge
-  - Audit all subprocess creation paths (`spawn`, `exec`, `execFile`, `fork`)
-  - Consider using `envVarsToPreserve` pattern consistently across all process spawning
-
-**Deprecated Legacy Auth Paths:**
-
-- Risk: Legacy auth bridges (`src/agents/pi-auth-json.ts`) maintain backwards compatibility with older auth flows
-- Files: `src/agents/pi-auth-json.ts` (marked `@deprecated`)
-- Current mitigation: Warnings logged when legacy paths are used
-- Recommendations: Plan deprecation timeline and migration guide for users on legacy auth
-
-**Cron Webhook Fallback:**
-
-- Risk: Deprecated notify+cron.webhook fallback still active in `src/gateway/server-cron.ts`, users may rely on undocumented behavior
-- Current mitigation: Warning logged: "cron: deprecated notify+cron.webhook fallback in use, migrate to delivery.mode=webhook"
-- Recommendations: Set deprecation timeline and removal date; document migration path in v2026.3.x release notes
-
-## Performance Bottlenecks
-
-**Large Type Definition Files:**
-
-- Problem: `src/plugins/types.ts` (2049 lines) and `src/config/schema.base.generated.ts` (16294 lines, generated) significantly impact build and typecheck times
-- Files: `src/plugins/types.ts`, `src/config/schema.base.generated.ts`
-- Cause: Monolithic type definitions and generated schema bundling all config properties
-- Improvement path:
-  - Split `types.ts` into focused modules (e.g., `plugin-lifecycle.ts`, `plugin-hooks.ts`, `plugin-sdk.ts`)
-  - Consider splitting generated schema by domain (channel configs, agent configs, etc.)
-  - Use conditional type evaluation optimization techniques
-
-**Memory Embeddings Batch Processing:**
-
-- Problem: Memory manager batches embedding operations via Gemini/Voyage API; batch failures can cascade
-- Files: `src/memory/manager-embedding-ops.ts`, `src/memory/batch-gemini.ts`, `src/memory/batch-voyage.ts`
-- Cause: Timeouts, API rate limiting, or network failures in large batches
-- Improvement path: Implement adaptive batch sizing, exponential backoff with jitter, and partial result recovery
-
-**Config Loading and Validation Pipeline:**
-
-- Problem: `src/config/io.ts` (2120 lines) performs sequential I/O: file read → env substitution → validation → defaults → merging
-- Files: `src/config/io.ts` (especially `loadConfig()` function)
-- Cause: Each step waits for the previous; no parallelization of independent operations
-- Improvement path: Profile actual load times; parallelize file reads and env substitution where independent; cache schema validation results
-
-## Fragile Areas
-
-**Session Store Update Race Condition:**
-
-- Files: `src/config/sessions.ts`, `src/agents/subagent-registry.ts`, cron/agent run workflows
-- Why fragile: Multiple agents/cron jobs may call `updateSessionStore()` concurrently without distributed locking
-- Safe modification:
-  - Verify tests cover concurrent session updates (load test with N simultaneous runs)
-  - Add file-level locking or atomic write patterns (write-then-rename)
-  - Document expected behavior for races (last-write-wins vs. merge-safe fields)
-- Test coverage: `src/gateway/session-utils.test.ts` covers some cases; cron-specific races not explicitly tested
-
-**Plugin Dynamic Import Boundaries:**
-
-- Files: `src/plugins/loader.ts`, all extension `src/` directories
-- Why fragile: Extensions dynamically import from `openclaw/plugin-sdk/*` paths; incorrect import order or circular dependencies can break at runtime
-- Safe modification:
-  - Always test `pnpm build` after plugin-related changes
-  - Watch for `[INEFFECTIVE_DYNAMIC_IMPORT]` warnings in build output
-  - Document the expectation: production code must use `openclaw/plugin-sdk/<subpath>`, not relative imports to `src/`
-- Test coverage: `src/plugins/loader.test.ts` validates loader but not all import edge cases
-
-**Subagent Lifecycle State Machine:**
-
-- Files: `src/agents/subagent-registry.ts` (1806 lines), `src/agents/subagent-announce.ts` (1710 lines), `src/agents/subagent-lifecycle-events.ts`
-- Why fragile: Complex state machine with multiple completion paths (error, killed, complete), deferred cleanup, and outcome notifications
-- Safe modification:
-  - Understand state diagram before touching: pending → active → ended (with deferred cleanup state)
-  - Run full test suite: `src/agents/subagent-*.test.ts` (50+ test files)
-  - Add any new states to `SubagentLifecycleEndedReason` enum carefully
-- Test coverage: Well-tested but state diagram could be documented visually
-
-**Agent Run Attempt Error Handling:**
-
-- Files: `src/agents/pi-embedded-runner/run/attempt.ts` (3234 lines), `src/agents/pi-embedded-runner/run.ts` (1859 lines)
-- Why fragile: Exception handling interleaved with cleanup (session lock release, process termination); errors in cleanup can mask original error
-- Safe modification:
-  - Always test error paths: run with intentional exceptions in each major try block
-  - Verify cleanup happens even if nested try/catch/finally blocks throw
-  - Document error recovery order: session unlock → process kill → reply dispatch → telemetry
-- Test coverage: `src/agents/pi-embedded-runner/run/attempt.test.ts` covers happy path; error path coverage gaps exist
-
-## Scaling Limits
-
-**Session Store File I/O on Large Fleets:**
-
-- Current capacity: Session store backed by JSON files in `~/.openclaw/sessions/`
-- Limit: 100+ agent sessions, each with 10+ runs = O(N) file I/O per cron tick or agent completion
-- Scaling path:
-  - Consider SQLite backend for `sessions/` (similar to memory/qmd management)
-  - Implement in-memory cache with periodic flush
-  - Profile actual I/O patterns before optimizing
-
-**Memory Embeddings API Quotas:**
-
-- Current capacity: Gemini/Voyage APIs have rate limits (depends on plan)
-- Limit: Large knowledge bases (1000+ documents) with frequent updates may hit quota
-- Scaling path:
-  - Implement request queuing with adaptive backoff
-  - Cache embeddings locally to reduce redundant API calls
-  - Support multiple embedding providers with failover
-
-**Plugin Runtime Isolation:**
-
-- Current capacity: Plugins loaded in main process; uncaught errors can crash the gateway
-- Limit: Misbehaving plugin can terminate entire app
-- Scaling path:
-  - Evaluate worker-thread or subprocess isolation for plugin execution
-  - Implement per-plugin error boundaries and fallback behaviors
-
-## Dependencies at Risk
-
-**@mariozechner/pi-agent-core (0.61.1):**
-
-- Risk: Core agent SDK with closed development; breaking changes require vendoring or fork
-- Impact: Agent runtime features, model compatibility, tool definitions
-- Migration plan: Monitor upstream releases; test against pre-release versions; consider maintaining minimal fork if upstream stalls
-
-**Legacy OpenAI WebSocket API:**
-
-- Risk: `src/agents/openai-ws-stream.ts` and `src/agents/openai-ws-connection.test.ts` use deprecated WebSocket mode
-- Impact: OpenAI may sunset this transport; need HTTP fallback
-- Migration plan: Add feature flag for WebSocket mode; implement HTTP alternative using existing HTTP stack
-
-**Node PTY (@lydell/node-pty):**
-
-- Risk: `src/node-host/runner.ts` depends on native module for pseudo-terminal support
-- Impact: Breaking Node.js version changes could require new binary; cross-platform issues common
-- Migration plan: Maintain build matrix for all target Node versions; consider alternative or in-house pty handling if maintenance stalls
-
-## Missing Critical Features
-
-**Distributed Locking for Multi-Instance Deployments:**
-
-- Problem: Session store, cron jobs, and configuration updates assume single-instance deployment
-- Blocks: Multi-gateway setups, high-availability deployments
-- Approach: Implement distributed lock (Redis-based, etcd, or gossip protocol) before scaling to multi-instance
-
-**Plugin Upgrade Without Restart:**
-
-- Problem: Plugin changes require full gateway restart
-- Blocks: Zero-downtime deployments, hot-patching user plugins
-- Approach: Design plugin lifecycle to support unload/reload without affecting active sessions
-
-**Structured Error Codes and Reporting:**
-
-- Problem: Error messages are free-form text; hard to parse for automation or analytics
-- Blocks: Error-driven UI flows, automated error routing, analytics
-- Approach: Define error taxonomy and use discriminated union types for errors (similar to `SubagentLifecycleEndedReason`)
-
-## Test Coverage Gaps
-
-**Concurrent Session Updates:**
-
-- What's not tested: Multiple agents updating the same session simultaneously (race conditions)
-- Files: `src/config/sessions.ts`, `src/gateway/session-utils.test.ts`
-- Risk: Silent data loss or corruption under load
-- Priority: High (affects production stability)
-
-**Plugin Loader Edge Cases:**
-
-- What's not tested: Circular plugin dependencies, missing peer dependencies, version conflicts during hot reload
-- Files: `src/plugins/loader.ts`
-- Risk: Plugin installation or upgrade failures that don't clearly fail
-- Priority: Medium (affects user experience during setup)
-
-**Error Recovery in Agent Runs:**
-
-- What's not tested: Session lock release when run throws at different stages; cleanup order validation
-- Files: `src/agents/pi-embedded-runner/run/attempt.ts`, `src/agents/session-write-lock.ts`
-- Risk: Resource leaks (held locks) or incomplete cleanup (orphaned processes)
-- Priority: High (production stability)
-
-**Config Include Circular Dependency Handling:**
-
-- What's not tested: Performance with deeply nested includes; partial failure recovery
-- Files: `src/config/includes.ts`, `src/config/includes.test.ts`
-- Risk: Config load hangs or crashes on pathological inputs
-- Priority: Medium (unusual but impacts startup)
-
-**Memory Embedding Batch Failure Recovery:**
-
-- What's not tested: Partial batch failures, timeout during large batch submission, provider-specific error handling
-- Files: `src/memory/manager-embedding-ops.ts`, `src/memory/batch-gemini.ts`
-- Risk: Stale embeddings or missing documents in search results
-- Priority: Medium (memory search quality)
+**Analysis Date:** 2026-03-28
 
 ---
 
-_Concerns audit: 2026-03-26_
+## Tech Debt
+
+### Accumulation of @deprecated API Surface
+
+- Issue: 82 `@deprecated` markers exist across production source. Many are load-bearing — callers
+  cannot simply delete the deprecated symbols because they may still be read by external plugin
+  authors or live in migration paths.
+- Files: `src/config/types.tools.ts` (8 deprecated fields), `src/config/types.telegram.ts`,
+  `src/config/types.discord.ts`, `src/config/types.base.ts`, `src/plugins/types.ts` (4 deprecated
+  type aliases), `src/plugins/runtime/types.ts`, `src/routing/resolve-route.ts`,
+  `src/plugin-sdk/index.ts`, `src/gateway/channel-health-monitor.ts`, `src/gateway/client.ts`
+- Impact: Every deprecated symbol that remains callable can be invoked by a third-party plugin,
+  widening the surface indefinitely. Conditional migration branches in `src/config/io.ts`,
+  `src/config/legacy-migrate.ts` etc. must be kept in sync with the deprecated fields or users
+  will silently lose config on upgrade.
+- Fix approach: Run an explicit deprecation-removal sprint per major version cycle. Emit runtime
+  warnings via `src/config/validation.ts` when deprecated keys are detected so operators are
+  forced to migrate before removal.
+
+### Legacy Config Migration Sprawl
+
+- Issue: Config migration logic is split across eight files adding up to ~2,500 LOC:
+  `src/config/legacy.migrations.part-1.ts` (615 LOC), `src/config/legacy.migrations.part-2.ts`
+  (426 LOC), `src/config/legacy.migrations.part-3.ts` (384 LOC), `src/config/legacy.ts`,
+  `src/config/legacy.rules.ts`, `src/config/legacy.shared.ts`, `src/config/legacy-web-search.ts`,
+  `src/config/legacy-migrate.ts`. Each migration part is independently imported and must be
+  independently ordered.
+- Impact: Every new config key that gets renamed adds another migration path. Any ordering error
+  between parts silently produces a broken config. The multi-part split makes it hard to reason
+  about which migration fires at what version.
+- Fix approach: Consolidate into a single versioned migration runner (one array of numbered
+  migrations) so ordering is explicit and auditable.
+
+### Oversized Core Files
+
+- Issue: 137 production source files in `src/` exceed the 700-LOC style guideline; 47 extension
+  files similarly exceed it. The most critical:
+  - `src/config/schema.base.generated.ts` — 16,294 LOC (generated but still parsed at startup)
+  - `src/agents/pi-embedded-runner/run/attempt.ts` — 3,234 LOC (single-function god-file for
+    agent run attempt; mixes model auth, prompt construction, hook dispatch, tool resolution)
+  - `src/config/io.ts` — 2,120 LOC
+  - `src/memory/qmd-manager.ts` — 2,076 LOC
+  - `src/agents/subagent-registry.ts` — 1,806 LOC
+  - `src/gateway/server-methods/chat.ts` — 1,754 LOC
+  - `extensions/telegram/src/bot-handlers.runtime.ts` — 1,829 LOC
+- Impact: Large files have high merge-conflict probability, are harder to test in isolation, and
+  make targeted search/edit risky (one change affects multiple responsibilities).
+- Fix approach: `run/attempt.ts` is the highest-priority split target; extract prompt-building,
+  hook dispatch, and tool-resolution into separate focused modules.
+
+### Test-Environment Guards Leaked Into Production Code
+
+- Issue: 202 occurrences of `process.env.VITEST`, `process.env.NODE_ENV === "test"`, and
+  `OPENCLAW_TEST_*` environment variable reads appear in non-test source files.
+- Files: `src/infra/restart.ts`, `src/infra/bonjour.ts`, `src/infra/machine-name.ts`,
+  `src/infra/env.ts`, `src/infra/update-startup.ts`, `src/infra/gateway-lock.ts`,
+  `src/infra/session-maintenance-warning.ts`, `src/memory/manager-sync-ops.ts`,
+  `src/config/io.ts`, `src/config/paths.ts`, and others
+- Impact: Test-only escape hatches in production code are a maintenance hazard — they may be
+  silently triggered by misconfigured CI environments and obscure real runtime bugs.
+- Fix approach: Replace inline `process.env.VITEST` guards with a single `isTestEnvironment()`
+  utility imported from `src/test-utils/` and co-located with test-utils. The production bundle
+  can tree-shake these calls if they are behind a proper boundary module.
+
+### Gaxios Prototype Mutation in Production
+
+- Issue: `src/infra/gaxios-fetch-compat.ts` installs a runtime patch onto `Gaxios.prototype._defaultAdapter`
+  to intercept HTTP dispatch. This violates the CLAUDE.md prohibition on prototype mutation.
+- Files: `src/infra/gaxios-fetch-compat.ts` (lines 301-316)
+- Impact: If `gaxios` is ever updated the `_defaultAdapter` method may be renamed or moved,
+  silently breaking the patch with no TypeScript error at compile time. The patch is also
+  non-idempotent if `installGaxiosFetchCompat()` is called from multiple worker threads.
+- Fix approach: Replace with a proper subclass (`class PatchedGaxios extends Gaxios`) or
+  constructor option override, as the library exposes `fetchImplementation` in its config.
+
+### `as any` Casts in Production Code
+
+- Issue: 23 occurrences of `as any`, `: any`, or `<any>` in non-test production source.
+- Files: `src/gateway/tools-invoke-http.ts` (4 casts), `src/gateway/server.auth.shared.ts` (2
+  casts), `src/plugins/hooks.ts` (4 casts around hook handler dispatch), `src/config/types.channels.ts`,
+  `src/hooks/bundled/session-memory/transcript.ts`, `src/auto-reply/reply/get-reply-inline-actions.ts`,
+  `src/auto-reply/reply/commands-core.ts`
+- Impact: Eliminates TypeScript's protection at those call sites; runtime errors escape the type
+  checker. Hook dispatch casts in `src/plugins/hooks.ts` are particularly risky because hooks are
+  user-provided.
+- Fix approach: Replace hook handler casts with a properly typed discriminated union for the hook
+  event; replace `as any` in gateway tool dispatch with a proper interface for the tool schema.
+
+---
+
+## Known Bugs
+
+### Typing Loop Calls `onReplyStart` After Run Completes
+
+- Symptoms: When `markRunComplete()` fires before the typing interval fires, the typing loop still
+  invokes `onReplyStart` again on the next interval tick, sending a spurious typing indicator to
+  the channel.
+- Files: `src/auto-reply/reply/typing-persistence.test.ts` (line 37, marked `// BUG:`)
+- Trigger: Any reply that completes within 6 seconds (the typing interval) while the dispatch-idle
+  flag has not yet been set.
+- Workaround: None; the test currently documents the expected (broken) behavior and asserts the
+  call count to prevent regression.
+
+### Blockquote-to-Paragraph Produces Triple Newline
+
+- Symptoms: Markdown `> quote\n\nparagraph` is rendered as `quote\n\n\nparagraph` (triple newline)
+  rather than double newline by `markdownToIR`.
+- Files: `src/markdown/ir.blockquote-spacing.test.ts` (lines 38-40, marked `// BUG:`)
+- Trigger: Any message containing a blockquote followed by a paragraph rendered through the
+  markdown IR pipeline (affects Telegram, Discord, and other channels using the shared renderer).
+- Workaround: None; downstream channel formatters may or may not collapse multiple blank lines.
+
+---
+
+## Security Considerations
+
+### `dangerouslyAllow*` Config Options Exposed to Operators
+
+- Risk: Config keys `dangerouslyAllowPrivateNetwork`, `dangerouslyDisableDeviceAuth`,
+  `dangerouslyAllowHostHeaderOriginFallback`, `dangerouslyAllowContainerNamespaceJoin`,
+  `dangerouslyAllowReservedContainerTargets`, and `dangerouslyAllowExternalBindSources` are
+  publicly documented in `src/config/schema.base.generated.ts` and may be set by any operator
+  reading the docs.
+- Files: `src/config/schema.base.generated.ts` (lines 434, 3046, 3049, 3052, 10150, 10156),
+  `src/infra/net/ssrf.ts` (line 35), `src/infra/net/fetch-guard.ts` (line 42)
+- Current mitigation: Keys include the `dangerously` prefix to communicate risk; SSRF guard in
+  `src/infra/net/ssrf.ts` enforces DNS pinning when not in bypass mode.
+- Recommendations: Require a secondary confirmation mechanism (for example a gateway restart or
+  explicit operator acknowledgment) when any `dangerously*` key is activated; log a persistent
+  WARNING to gateway logs when such keys are active at runtime.
+
+### Deprecated Proxy Bypass Still Compilable
+
+- Risk: `GuardedFetchOptions.proxy: "env"` and
+  `dangerouslyAllowEnvProxyWithoutPinnedDns: true` are marked `@deprecated` but remain
+  in the type definition and in the runtime branch at `src/infra/net/fetch-guard.ts:88`. A future
+  developer could add a caller without realizing the bypass exists.
+- Files: `src/infra/net/fetch-guard.ts` (lines 37-42, 88)
+- Current mitigation: Deprecated JSDoc; no callers detected in non-test production code.
+- Recommendations: Remove the deprecated fields entirely in the next major version; until then,
+  add a runtime log warning when the deprecated path executes.
+
+### Extension Boundary Violation in Telegram Test Support File
+
+- Risk: `extensions/telegram/src/bot-native-commands.menu-test-support.ts` imports a type
+  directly from `../../../src/agents/skills.js`, crossing the extension package boundary into core
+  internals. While this file is test support only, it sets a precedent that type-only cross-package
+  imports are acceptable.
+- Files: `extensions/telegram/src/bot-native-commands.menu-test-support.ts` (line 3)
+- Current mitigation: Import is `type`-only; no runtime coupling.
+- Recommendations: Expose `SkillCommandSpec` via `openclaw/plugin-sdk/<subpath>` and update the
+  import to use the public surface.
+
+---
+
+## Performance Bottlenecks
+
+### Large Generated Config Schema Parsed at Import Time
+
+- Problem: `src/config/schema.base.generated.ts` is 16,294 LOC of TypeBox JSON Schema objects.
+  It is statically imported at gateway startup, contributing to cold-start time.
+- Files: `src/config/schema.base.generated.ts`
+- Cause: Generated schema is not lazy-loaded; any module that imports config validation brings the
+  full schema into memory.
+- Improvement path: Move to a deferred-import pattern similar to other runtime boundaries
+  (`src/shared/lazy-runtime.ts`), loading the schema only when `validateConfig` is called for the
+  first time.
+
+### High Fake-Timer Test Count Without Verified Cleanup
+
+- Problem: 532 test locations use `vi.advanceTimersByTime` or `useFakeTimers`. Because
+  `--isolate=false` is enforced, leaked fake timers can bleed between suites and cause flaky
+  ordering-sensitive failures.
+- Files: Distributed across `src/**/*.test.ts`
+- Cause: No shared lint rule enforces `afterEach(() => vi.useRealTimers())` or equivalent cleanup.
+- Improvement path: Add a global Vitest setup hook that asserts fake timer cleanup; this has been
+  flagged as a heap-leak concern in `.agents/skills/openclaw-test-heap-leaks/`.
+
+---
+
+## Fragile Areas
+
+### `src/agents/pi-embedded-runner/run/attempt.ts` (3,234 LOC)
+
+- Files: `src/agents/pi-embedded-runner/run/attempt.ts`
+- Why fragile: This single file owns model auth resolution, prompt construction, tool registration,
+  hook dispatch, bootstrap budget analysis, image sanitization, streaming, and failover. Any change
+  to one concern risks unintended side effects on another. It imports from 40+ other modules.
+- Safe modification: Always run the full gateway test suite (`pnpm test`) after changes, not just
+  scoped tests. The e2e test `src/agents/pi-embedded-runner/run/attempt.test.ts` (1,998 LOC) is
+  the primary regression gate.
+- Test coverage: Has a companion test file, but integration test coverage for edge-case model auth
+  and hook interactions is thin.
+
+### Subagent Registry (In-Memory Global State)
+
+- Files: `src/agents/subagent-registry.ts` (1,806 LOC), `src/agents/subagent-registry-state.ts`,
+  `src/agents/subagent-registry-store.ts`
+- Why fragile: The registry is a process-scoped singleton. Tests must call
+  `resetSubagentRegistryForTests()` or state bleeds between test suites. Registry mutations during
+  active subagent runs can produce race conditions.
+- Safe modification: Wrap all mutations in the exported registry API functions; do not directly
+  mutate the in-memory store from `server-methods/chat.ts` or other callers.
+- Test coverage: Unit tests exist but do not cover concurrent registration of overlapping session
+  keys.
+
+### Memory Index Hybrid Search (Three Skipped Tests)
+
+- Files: `src/memory/index.test.ts` (lines 291, 1265, 1274)
+- Why fragile: Three integration tests for hybrid vector+keyword search are unconditionally
+  skipped with `it.skip`. The actual search path in `src/memory/manager-sync-ops.ts` is exercised
+  in production but the test harness does not have a deterministic vector injection strategy.
+- Safe modification: Any change to `src/memory/manager-sync-ops.ts` embedding or scoring logic
+  must be validated manually or by enabling the live test suite (`OPENCLAW_LIVE_TEST=1`).
+- Test coverage gap: High — the skipped tests cover the primary user-visible memory retrieval
+  path.
+
+### Telegram Sticker/Fragment E2E Tests Disabled
+
+- Files: `extensions/telegram/src/bot.media.stickers-and-fragments.e2e.test.ts` (lines 22, 73)
+- Why fragile: Two sticker-related E2E tests are disabled pending issue #50185 (deterministic
+  static sticker fetch injection). The code paths they cover involve media group buffering in
+  `extensions/telegram/src/bot-handlers.buffers.ts`.
+- Safe modification: Changes to media group flush timing (`MEDIA_GROUP_TIMEOUT_MS`) or the
+  `TextFragmentEntry` timer must be manually tested against real Telegram sticker inputs.
+- Test coverage gap: Medium — buffering logic has no automated coverage in CI.
+
+---
+
+## Scaling Limits
+
+### `src/config/io.ts` Config Write Lock
+
+- Current capacity: Single-process advisory lock via `src/infra/fs-pinned-write-helper.ts`.
+- Limit: Concurrent gateway processes (multi-agent or test workers) writing config simultaneously
+  can produce interleaved writes. The lock is advisory and does not work across OS-level process
+  boundaries under high concurrency.
+- Scaling path: Move to a SQLite-backed config store (which provides OS-level locking) or add an
+  explicit IPC queue for config writes.
+
+### `src/memory/qmd-manager.ts` Synchronous File Walk
+
+- Current capacity: Functional up to several thousand memory files.
+- Limit: `qmd-manager.ts` (2,076 LOC) performs synchronous directory walks when building the
+  memory index. Large agent deployments with thousands of memory entries will see startup latency
+  grow linearly.
+- Scaling path: Convert the walk to an incremental inotify/fs.watch approach; the infrastructure
+  exists in `src/infra/fs-safe.ts`.
+
+---
+
+## Dependencies at Risk
+
+### `@buape/carbon` — Beta Pinned Version
+
+- Risk: The Discord extension pins `@buape/carbon` at a pre-release timestamp version
+  `0.0.0-beta-20260317045421`. CLAUDE.md explicitly forbids updating this dependency ("Never
+  update the Carbon dependency").
+- Files: `extensions/discord/package.json` (line 7)
+- Impact: Security patches and API fixes in Carbon cannot be applied without explicit operator
+  consent. If Discord changes its interaction API, the extension may break with no upgrade path.
+- Migration plan: No migration plan is documented. Coordinate with maintainers before any upgrade.
+
+### `@mariozechner/pi-*` — Exact Pinned External SDK
+
+- Risk: Four pi-agent packages (`pi-agent-core`, `pi-ai`, `pi-coding-agent`, `pi-tui`) are pinned
+  at exact versions (`0.61.1`) with no range. These are the core agent execution primitives.
+- Files: `package.json` (dependencies block)
+- Impact: A critical security fix in these packages cannot be applied automatically; every bump
+  requires deliberate version testing of `src/agents/pi-embedded-runner/` code paths.
+- Migration plan: Establish a validation test matrix for pi-agent upgrades before allowing minor
+  version ranges.
+
+### `hono` / `@hono/node-server` — Overridden Exact Versions
+
+- Risk: Both are pinned in `pnpm.overrides` at exact versions (`4.12.8`, `1.19.10`). Any
+  transitive dependency that depends on a newer hono version will be silently downgraded.
+- Files: `package.json` (`pnpm.overrides` block)
+- Impact: Gateway HTTP handling (`src/gateway/server.impl.ts`) could silently lose upstream
+  security patches if the pinned versions are not monitored.
+- Migration plan: Schedule a periodic review (every 30 days) of `hono` changelog for security
+  fixes; use `pnpm audit` as a signal.
+
+---
+
+## Missing Critical Features
+
+### No Public Audit Trail for `dangerously*` Config Activations
+
+- Problem: When an operator enables `dangerouslyDisableDeviceAuth` or any other bypass key, no
+  persistent log entry or audit event is emitted.
+- Blocks: SOC2/security audit traceability for high-risk config changes.
+
+---
+
+## Test Coverage Gaps
+
+### Agent Run Attempt Hook Dispatch
+
+- What's not tested: The `as any` hook handler invocations in `src/plugins/hooks.ts`
+  (lines 748, 813) are not covered by typed integration tests. Malformed hook results can crash
+  the agent loop silently.
+- Files: `src/plugins/hooks.ts`
+- Risk: A plugin returning an unexpected shape from a `beforeAgentStart` or `beforePromptBuild`
+  hook will cause untyped runtime errors in production.
+- Priority: High
+
+### Memory Hybrid Search (Skipped Tests)
+
+- What's not tested: Vector + keyword hybrid scoring in `src/memory/manager-sync-ops.ts` embedding
+  path, including zero-embedding fallback and `minScore` threshold enforcement.
+- Files: `src/memory/index.test.ts` (skipped: lines 291, 1265, 1274)
+- Risk: Search result quality regressions after embedding model changes go undetected until
+  production user reports.
+- Priority: High
+
+### Telegram Media Group Buffer Timers
+
+- What's not tested: `TextFragmentEntry.timer` lifecycle in
+  `extensions/telegram/src/bot-handlers.buffers.ts`; the `MEDIA_GROUP_TIMEOUT_MS` flush path
+  under concurrent media group arrivals.
+- Files: `extensions/telegram/src/bot.media.stickers-and-fragments.e2e.test.ts` (issue #50185)
+- Risk: Silent message drops or double-deliveries when Telegram sends sticker media groups.
+- Priority: Medium
+
+### Typing Persistence Bug Path
+
+- What's not tested beyond the documented bug: What happens when the dispatch-idle signal fires
+  during a mid-interval typing cycle.
+- Files: `src/auto-reply/reply/typing-persistence.test.ts`
+- Risk: Users see a frozen or double typing indicator in channels.
+- Priority: Medium
+
+---
+
+_Concerns audit: 2026-03-28_
