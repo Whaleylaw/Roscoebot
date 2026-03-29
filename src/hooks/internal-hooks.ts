@@ -13,7 +13,7 @@ import type { SessionsPatchParams } from "../gateway/protocol/index.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 
-export type InternalHookEventType = "command" | "session" | "agent" | "gateway" | "message";
+export type InternalHookEventType = "command" | "session" | "agent" | "gateway" | "message" | "project";
 
 export type AgentBootstrapHookContext = {
   workspaceDir: string;
@@ -454,4 +454,29 @@ export function isSessionPatchEvent(event: InternalHookEvent): event is SessionP
     typeof context.sessionEntry === "object" &&
     context.sessionEntry !== null
   );
+}
+
+// ============================================================================
+// Project Hook Events
+// ============================================================================
+
+export type ProjectTaskCompleteHookContext = {
+  taskId: string;
+  workflowId: string | null;
+  projectDir: string;
+};
+
+export type ProjectTaskCompleteHookEvent = InternalHookEvent & {
+  type: "project";
+  action: "task-complete";
+  context: ProjectTaskCompleteHookContext;
+};
+
+export function isProjectTaskCompleteEvent(
+  event: InternalHookEvent,
+): event is ProjectTaskCompleteHookEvent {
+  if (!isHookEventTypeAndAction(event, "project", "task-complete")) return false;
+  const context = getHookContext<ProjectTaskCompleteHookContext>(event);
+  if (!context) return false;
+  return hasStringContextField(context, "taskId") && hasStringContextField(context, "projectDir");
 }
