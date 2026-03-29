@@ -63,6 +63,10 @@ export type { QueueSection } from "./queue-manager.js";
 // Capability matching
 export { matchCapabilities } from "./capability-matcher.js";
 
+// Capability registry (project-level validation)
+export { validateCapabilities, STANDARD_CAPABILITIES } from "./capability-registry.js";
+export type { StandardCapability } from "./capability-registry.js";
+
 // Checkpoint (interruption/resume support)
 export { createCheckpoint, readCheckpoint, writeCheckpoint, checkpointPath } from "./checkpoint.js";
 export type { CheckpointData } from "./checkpoint.js";
