@@ -110,6 +110,10 @@ export type {
   VerificationRecord,
 } from "./verification.js";
 
+// Task lifecycle (completion entry point)
+export { completeTask } from "./task-lifecycle.js";
+export type { CompleteTaskOpts, CompleteTaskResult } from "./task-lifecycle.js";
+
 // Heartbeat scanner (agent task pickup)
 export { scanAndClaimTask } from "./heartbeat-scanner.js";
 export type { ScanAndClaimResult, ScanAndClaimOpts } from "./heartbeat-scanner.js";
