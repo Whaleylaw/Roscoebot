@@ -61,7 +61,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **HIL-01**: Tasks are classified by side_effect_class: none, reversible, irreversible
 - [x] **HIL-02**: Tasks with side_effect_class "none" or "reversible" auto-proceed without human approval
 - [x] **HIL-03**: Tasks with side_effect_class "irreversible" or approval_required=true pause for human confirmation
-- [ ] **HIL-04**: Human checkpoints present the task, its planned action, and potential consequences for informed approval
+- [x] **HIL-04**: Human checkpoints present the task, its planned action, and potential consequences for informed approval
 
 ### Project Placement
 
@@ -168,7 +168,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HIL-01      | Phase 3 | Complete |
 | HIL-02      | Phase 3 | Complete |
 | HIL-03      | Phase 3 | Complete |
-| HIL-04      | Phase 3 | Pending  |
+| HIL-04      | Phase 3 | Complete |
 | PPL-01      | Phase 5 | Pending  |
 | PPL-02      | Phase 5 | Pending  |
 | PPL-03      | Phase 5 | Pending  |
