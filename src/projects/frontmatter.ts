@@ -4,12 +4,14 @@ import {
   ProjectFrontmatterSchema,
   QueueFrontmatterSchema,
   TaskFrontmatterSchema,
+  WorkflowFrontmatterSchema,
 } from "./schemas.js";
 import type {
   ParseResult,
   ProjectFrontmatter,
   QueueFrontmatter,
   TaskFrontmatter,
+  WorkflowFrontmatter,
 } from "./types.js";
 
 /**
@@ -124,4 +126,11 @@ export function parseQueueFrontmatter(
   filePath: string,
 ): ParseResult<QueueFrontmatter> {
   return parseAndValidate(content, filePath, QueueFrontmatterSchema);
+}
+
+export function parseWorkflowFrontmatter(
+  content: string,
+  filePath: string,
+): ParseResult<WorkflowFrontmatter> {
+  return parseAndValidate(content, filePath, WorkflowFrontmatterSchema);
 }
