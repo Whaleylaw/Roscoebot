@@ -37,10 +37,10 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Verification
 
 - [x] **VER-01**: Each task has a verification_type: automatic, human, external, or mixed
-- [ ] **VER-02**: Automatic verification checks defined success criteria (test passes, file exists, command output matches)
-- [ ] **VER-03**: Human verification creates a checkpoint that pauses execution until user confirms
+- [x] **VER-02**: Automatic verification checks defined success criteria (test passes, file exists, command output matches)
+- [x] **VER-03**: Human verification creates a checkpoint that pauses execution until user confirms
 - [x] **VER-04**: Verification evidence is recorded alongside task checkpoint (command output, file diffs, API responses, user confirmation)
-- [ ] **VER-05**: A task is not marked "done" until verification passes; failed verification triggers recovery
+- [x] **VER-05**: A task is not marked "done" until verification passes; failed verification triggers recovery
 
 ### Recovery
 
@@ -59,8 +59,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Human-in-the-Loop
 
 - [x] **HIL-01**: Tasks are classified by side_effect_class: none, reversible, irreversible
-- [ ] **HIL-02**: Tasks with side_effect_class "none" or "reversible" auto-proceed without human approval
-- [ ] **HIL-03**: Tasks with side_effect_class "irreversible" or approval_required=true pause for human confirmation
+- [x] **HIL-02**: Tasks with side_effect_class "none" or "reversible" auto-proceed without human approval
+- [x] **HIL-03**: Tasks with side_effect_class "irreversible" or approval_required=true pause for human confirmation
 - [ ] **HIL-04**: Human checkpoints present the task, its planned action, and potential consequences for informed approval
 
 ### Project Placement
@@ -153,10 +153,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRG-02      | Phase 6 | Pending  |
 | PRG-03      | Phase 6 | Pending  |
 | VER-01      | Phase 3 | Complete |
-| VER-02      | Phase 3 | Pending  |
-| VER-03      | Phase 3 | Pending  |
+| VER-02      | Phase 3 | Complete |
+| VER-03      | Phase 3 | Complete |
 | VER-04      | Phase 3 | Complete |
-| VER-05      | Phase 3 | Pending  |
+| VER-05      | Phase 3 | Complete |
 | REC-01      | Phase 4 | Pending  |
 | REC-02      | Phase 4 | Pending  |
 | REC-03      | Phase 4 | Pending  |
@@ -166,8 +166,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RSM-02      | Phase 4 | Pending  |
 | RSM-03      | Phase 4 | Pending  |
 | HIL-01      | Phase 3 | Complete |
-| HIL-02      | Phase 3 | Pending  |
-| HIL-03      | Phase 3 | Pending  |
+| HIL-02      | Phase 3 | Complete |
+| HIL-03      | Phase 3 | Complete |
 | HIL-04      | Phase 3 | Pending  |
 | PPL-01      | Phase 5 | Pending  |
 | PPL-02      | Phase 5 | Pending  |
