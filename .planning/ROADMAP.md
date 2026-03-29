@@ -54,7 +54,15 @@ Plans:
 3. Decomposed tasks appear in the project queue with correct dependencies, capabilities, and priority so that agents claim them on heartbeat without orchestrator-to-agent assignment
 4. Task and queue state updates natively through the existing project system as agents claim and complete work
 5. Capability matching routes tasks to agents with matching capability tags and new capability types can be added without code changes
-   **Plans**: TBD
+
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 02-01-PLAN.md -- Agent schema extension, generateTaskMd, orchestrator workspace templates
+- [ ] 02-02-PLAN.md -- QueueManager.addTasks batch method, validateTaskGraph, DecomposedTask type
+- [ ] 02-03-PLAN.md -- Atomic batch task creation pipeline (createTaskBatch)
+- [ ] 02-04-PLAN.md -- Workflow status hook, orchestrateGoal pipeline function
 
 ### Phase 3: Verification & Human-in-the-Loop
 
@@ -116,7 +124,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | Phase                                              | Plans Complete | Status      | Completed |
 | -------------------------------------------------- | -------------- | ----------- | --------- |
 | 1. Schema & Workflow Foundation                    | 0/3            | Planning    | -         |
-| 2. Orchestrator, Decomposition & Queue Integration | 0/TBD          | Not started | -         |
+| 2. Orchestrator, Decomposition & Queue Integration | 0/4            | Planning    | -         |
 | 3. Verification & Human-in-the-Loop                | 0/TBD          | Not started | -         |
 | 4. Recovery & Resumability                         | 0/TBD          | Not started | -         |
 | 5. Intake Pipeline & Templates                     | 0/TBD          | Not started | -         |
