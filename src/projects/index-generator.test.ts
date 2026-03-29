@@ -32,6 +32,7 @@ describe("index-generator", () => {
         tags: ["dev"],
         columns: ["Backlog", "Done"],
         dashboard: { widgets: ["project-status"] },
+        allowed_capabilities: [],
       };
       const result = generateProjectIndex(fm);
       expect(result.name).toBe("test-project");
@@ -57,6 +58,12 @@ describe("index-generator", () => {
         claimed_by: "agent-1",
         claimed_at: "2026-01-01T00:00:00Z",
         parent: null,
+        workflow: null,
+        verification_type: "automatic",
+        side_effect_class: "none",
+        approval_required: false,
+        estimated_size: "medium",
+        execution_mode: "auto",
       };
       const result = generateTaskIndex(fm);
       expect(result.id).toBe("TASK-001");
@@ -82,6 +89,12 @@ describe("index-generator", () => {
           claimed_by: null,
           claimed_at: null,
           parent: null,
+          workflow: null,
+          verification_type: "automatic",
+          side_effect_class: "none",
+          approval_required: false,
+          estimated_size: "medium",
+          execution_mode: "auto",
         },
         {
           id: "TASK-002",
@@ -94,6 +107,12 @@ describe("index-generator", () => {
           claimed_by: "agent-1",
           claimed_at: null,
           parent: null,
+          workflow: null,
+          verification_type: "automatic",
+          side_effect_class: "none",
+          approval_required: false,
+          estimated_size: "medium",
+          execution_mode: "auto",
         },
       ];
       const result = generateBoardIndex(tasks, ["Backlog", "In Progress", "Done"]);
@@ -129,6 +148,12 @@ describe("index-generator", () => {
           claimed_by: null,
           claimed_at: null,
           parent: null,
+          workflow: null,
+          verification_type: "automatic",
+          side_effect_class: "none",
+          approval_required: false,
+          estimated_size: "medium",
+          execution_mode: "auto",
         },
       ];
       const result = generateBoardIndex(tasks, ["Backlog", "Done"]);
