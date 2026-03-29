@@ -13,7 +13,13 @@ import type { SessionsPatchParams } from "../gateway/protocol/index.js";
 import { createSubsystemLogger } from "../logging/subsystem.js";
 import { resolveGlobalSingleton } from "../shared/global-singleton.js";
 
-export type InternalHookEventType = "command" | "session" | "agent" | "gateway" | "message" | "project";
+export type InternalHookEventType =
+  | "command"
+  | "session"
+  | "agent"
+  | "gateway"
+  | "message"
+  | "project";
 
 export type AgentBootstrapHookContext = {
   workspaceDir: string;

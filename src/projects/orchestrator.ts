@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
-import { validateCapabilities } from "./capability-registry.js";
 import { matchCapabilities } from "./capability-matcher.js";
+import { validateCapabilities } from "./capability-registry.js";
 import { parseProjectFrontmatter, parseWorkflowFrontmatter } from "./frontmatter.js";
 import { QueueManager } from "./queue-manager.js";
 import { ensureWorkflowsDir, ProjectManager, writeFileAtomic } from "./scaffold.js";
@@ -140,9 +140,7 @@ export function validateTaskGraph(
         projectContext.allowedCapabilities,
       );
       if (!valid) {
-        errors.push(
-          `Task ${task.id}: unregistered capabilities: ${unregistered.join(", ")}`,
-        );
+        errors.push(`Task ${task.id}: unregistered capabilities: ${unregistered.join(", ")}`);
       }
     }
   }
@@ -258,9 +256,7 @@ async function updateWorkflowTasks(
  *     (workflow file corruption is very rare).
  * The caller (orchestrateGoal in Plan 04) can re-run updateWorkflowTasks to fix.
  */
-export async function createTaskBatch(
-  opts: CreateTaskBatchOpts,
-): Promise<CreateTaskBatchResult> {
+export async function createTaskBatch(opts: CreateTaskBatchOpts): Promise<CreateTaskBatchResult> {
   const { projectDir, workflowId, tasks } = opts;
   const qm = new QueueManager(projectDir);
   const createdFiles: string[] = [];
@@ -399,18 +395,14 @@ async function updateWorkflowStatus(
  *
  * Returns errors without side effects if validation fails.
  */
-export async function orchestrateGoal(
-  opts: OrchestrateGoalOpts,
-): Promise<OrchestrateGoalResult> {
+export async function orchestrateGoal(opts: OrchestrateGoalOpts): Promise<OrchestrateGoalResult> {
   const { projectDir, goal, goalTitle, tasks, agentCapabilities } = opts;
 
   // Step 1: Read project allowed_capabilities
   const projectMdPath = path.join(projectDir, "PROJECT.md");
   const projectContent = await fs.readFile(projectMdPath, "utf8");
   const projectResult = parseProjectFrontmatter(projectContent, projectMdPath);
-  const allowedCapabilities = projectResult.success
-    ? projectResult.data.allowed_capabilities
-    : [];
+  const allowedCapabilities = projectResult.success ? projectResult.data.allowed_capabilities : [];
 
   // Step 2: Validate task graph
   const validation = validateTaskGraph(tasks, {
@@ -530,7 +522,9 @@ export function parseOrchestratorPayload(message: string): ParsePayloadResult {
       ["auto", "ask-irreversible", "ask-all"].includes(c.sideEffectPolicy)
     ) {
       payload.constraints.sideEffectPolicy = c.sideEffectPolicy as
-        "auto" | "ask-irreversible" | "ask-all";
+        | "auto"
+        | "ask-irreversible"
+        | "ask-all";
     }
   }
 

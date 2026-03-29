@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { parseWorkflowFrontmatter } from "./frontmatter.js";
 import {
   validateTaskGraph,
   createTaskBatch,
@@ -9,9 +10,8 @@ import {
   parseOrchestratorPayload,
   type DecomposedTask,
 } from "./orchestrator.js";
-import { generateWorkflowMd, generateQueueMd, generateProjectMd } from "./templates.js";
-import { parseWorkflowFrontmatter } from "./frontmatter.js";
 import { parseQueue } from "./queue-parser.js";
+import { generateWorkflowMd, generateQueueMd, generateProjectMd } from "./templates.js";
 
 /** Build a minimal DecomposedTask with overrides. */
 function makeTask(overrides: Partial<DecomposedTask> & { id: string }): DecomposedTask {
@@ -79,7 +79,9 @@ describe("validateTaskGraph", () => {
     const result = validateTaskGraph(tasks, emptyContext);
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.errors.some((e) => e.includes("TASK-999") && e.includes("does not exist"))).toBe(true);
+      expect(
+        result.errors.some((e) => e.includes("TASK-999") && e.includes("does not exist")),
+      ).toBe(true);
     }
   });
 
@@ -92,7 +94,9 @@ describe("validateTaskGraph", () => {
     const result = validateTaskGraph(tasks, ctx);
     expect(result.valid).toBe(false);
     if (!result.valid) {
-      expect(result.errors.some((e) => e.includes("exotic-cap") && e.includes("unregistered"))).toBe(true);
+      expect(
+        result.errors.some((e) => e.includes("exotic-cap") && e.includes("unregistered")),
+      ).toBe(true);
     }
   });
 
@@ -178,11 +182,7 @@ describe("createTaskBatch", () => {
       generateProjectMd({ name: "test-project" }),
       "utf-8",
     );
-    await fs.writeFile(
-      path.join(projectDir, "queue.md"),
-      generateQueueMd(),
-      "utf-8",
-    );
+    await fs.writeFile(path.join(projectDir, "queue.md"), generateQueueMd(), "utf-8");
     return projectDir;
   }
 
@@ -194,11 +194,7 @@ describe("createTaskBatch", () => {
       goal: "Test goal",
       tasks: [],
     });
-    await fs.writeFile(
-      path.join(projectDir, "workflows", `${id}.md`),
-      content,
-      "utf-8",
-    );
+    await fs.writeFile(path.join(projectDir, "workflows", `${id}.md`), content, "utf-8");
   }
 
   /** Build 3 test DecomposedTask objects. */
@@ -229,7 +225,10 @@ describe("createTaskBatch", () => {
     expect(result.taskIds).toHaveLength(3);
     for (const taskId of result.taskIds) {
       const taskPath = path.join(projectDir, "tasks", `${taskId}.md`);
-      const exists = await fs.access(taskPath).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(taskPath)
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(true);
     }
   });
@@ -262,10 +261,7 @@ describe("createTaskBatch", () => {
       tasks: makeTestTasks(),
     });
 
-    const wfContent = await fs.readFile(
-      path.join(projectDir, "workflows", "WF-001.md"),
-      "utf-8",
-    );
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
     const wfParsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
     expect(wfParsed.success).toBe(true);
     if (wfParsed.success) {
@@ -298,10 +294,7 @@ describe("createTaskBatch", () => {
       tasks: makeTestTasks(),
     });
 
-    const content = await fs.readFile(
-      path.join(projectDir, "tasks", "TASK-001.md"),
-      "utf-8",
-    );
+    const content = await fs.readFile(path.join(projectDir, "tasks", "TASK-001.md"), "utf-8");
     expect(content).toContain("## Objective");
     expect(content).toContain("## Context");
     expect(content).toContain("## Action Guidance");
@@ -357,7 +350,10 @@ describe("createTaskBatch", () => {
 
     // Verify files exist before rollback
     for (const taskId of result.taskIds) {
-      const exists = await fs.access(path.join(projectDir, "tasks", `${taskId}.md`)).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(path.join(projectDir, "tasks", `${taskId}.md`))
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(true);
     }
 
@@ -365,7 +361,10 @@ describe("createTaskBatch", () => {
 
     // Verify files removed after rollback
     for (const taskId of result.taskIds) {
-      const exists = await fs.access(path.join(projectDir, "tasks", `${taskId}.md`)).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(path.join(projectDir, "tasks", `${taskId}.md`))
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(false);
     }
   });
@@ -414,10 +413,7 @@ describe("createTaskBatch", () => {
     });
 
     // Second task depends on first, third depends on second
-    const task2Content = await fs.readFile(
-      path.join(projectDir, "tasks", "TASK-002.md"),
-      "utf-8",
-    );
+    const task2Content = await fs.readFile(path.join(projectDir, "tasks", "TASK-002.md"), "utf-8");
     expect(task2Content).toContain("TASK-001");
     // Should not contain the batch-local ID
     expect(task2Content).not.toContain("batch-1");
@@ -437,11 +433,7 @@ describe("orchestrateGoal", () => {
       generateProjectMd({ name: "test-project" }),
       "utf-8",
     );
-    await fs.writeFile(
-      path.join(projectDir, "queue.md"),
-      generateQueueMd(),
-      "utf-8",
-    );
+    await fs.writeFile(path.join(projectDir, "queue.md"), generateQueueMd(), "utf-8");
     return projectDir;
   }
 
@@ -485,7 +477,10 @@ describe("orchestrateGoal", () => {
     // Task files exist
     expect(result.taskIds).toHaveLength(2);
     for (const taskId of result.taskIds) {
-      const exists = await fs.access(path.join(projectDir, "tasks", `${taskId}.md`)).then(() => true).catch(() => false);
+      const exists = await fs
+        .access(path.join(projectDir, "tasks", `${taskId}.md`))
+        .then(() => true)
+        .catch(() => false);
       expect(exists).toBe(true);
     }
 
@@ -531,9 +526,7 @@ describe("orchestrateGoal", () => {
     );
     await fs.writeFile(path.join(projectDir, "PROJECT.md"), updatedProject, "utf-8");
 
-    const tasks: DecomposedTask[] = [
-      makeTask({ id: "batch-1", capabilities: ["exotic-cap"] }),
-    ];
+    const tasks: DecomposedTask[] = [makeTask({ id: "batch-1", capabilities: ["exotic-cap"] })];
 
     const result = await orchestrateGoal({
       projectDir,

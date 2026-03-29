@@ -1,14 +1,14 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import YAML from "yaml";
+import { createSubsystemLogger } from "../../logging/subsystem.js";
+import { parseTaskFrontmatter, parseWorkflowFrontmatter } from "../../projects/frontmatter.js";
+import { writeFileAtomic } from "../../projects/scaffold.js";
 import {
   type ProjectTaskCompleteHookContext,
   isProjectTaskCompleteEvent,
   registerInternalHook,
 } from "../internal-hooks.js";
-import { parseTaskFrontmatter, parseWorkflowFrontmatter } from "../../projects/frontmatter.js";
-import { writeFileAtomic } from "../../projects/scaffold.js";
-import { createSubsystemLogger } from "../../logging/subsystem.js";
 
 const log = createSubsystemLogger("hooks/workflow-status");
 

@@ -2,13 +2,18 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { parseWorkflowFrontmatter } from "../../projects/frontmatter.js";
+import {
+  generateTaskMd,
+  generateWorkflowMd,
+  generateQueueMd,
+  generateProjectMd,
+} from "../../projects/templates.js";
 import {
   clearInternalHooks,
   createInternalHookEvent,
   triggerInternalHook,
 } from "../internal-hooks.js";
-import { generateTaskMd, generateWorkflowMd, generateQueueMd, generateProjectMd } from "../../projects/templates.js";
-import { parseWorkflowFrontmatter } from "../../projects/frontmatter.js";
 import { registerWorkflowStatusHook } from "./workflow-status-hook.js";
 
 describe("workflow-status-hook", () => {
@@ -29,11 +34,7 @@ describe("workflow-status-hook", () => {
       generateProjectMd({ name: "test-project" }),
       "utf-8",
     );
-    await fs.writeFile(
-      path.join(projectDir, "queue.md"),
-      generateQueueMd(),
-      "utf-8",
-    );
+    await fs.writeFile(path.join(projectDir, "queue.md"), generateQueueMd(), "utf-8");
 
     const taskStatuses = opts?.taskStatuses ?? { "TASK-001": "done", "TASK-002": "done" };
     const taskIds = Object.keys(taskStatuses);
@@ -98,10 +99,7 @@ describe("workflow-status-hook", () => {
     });
     await triggerInternalHook(event);
 
-    const wfContent = await fs.readFile(
-      path.join(projectDir, "workflows", "WF-001.md"),
-      "utf-8",
-    );
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
     const parsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -122,10 +120,7 @@ describe("workflow-status-hook", () => {
     });
     await triggerInternalHook(event);
 
-    const wfContent = await fs.readFile(
-      path.join(projectDir, "workflows", "WF-001.md"),
-      "utf-8",
-    );
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
     const parsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -147,10 +142,7 @@ describe("workflow-status-hook", () => {
     await triggerInternalHook(event);
 
     // Workflow should remain unchanged
-    const wfContent = await fs.readFile(
-      path.join(projectDir, "workflows", "WF-001.md"),
-      "utf-8",
-    );
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
     const parsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -173,10 +165,7 @@ describe("workflow-status-hook", () => {
     });
     await triggerInternalHook(event);
 
-    const wfContent = await fs.readFile(
-      path.join(projectDir, "workflows", "WF-001.md"),
-      "utf-8",
-    );
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
     const parsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
     expect(parsed.success).toBe(true);
     if (parsed.success) {
@@ -198,10 +187,7 @@ describe("workflow-status-hook", () => {
     });
     await triggerInternalHook(event);
 
-    const wfContent = await fs.readFile(
-      path.join(projectDir, "workflows", "WF-001.md"),
-      "utf-8",
-    );
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
     const parsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
     expect(parsed.success).toBe(true);
     if (parsed.success) {

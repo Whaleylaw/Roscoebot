@@ -37,7 +37,12 @@ export type { QueueEntry, ParsedQueue } from "./queue-parser.js";
 // Scaffold
 export { ProjectManager, ensureWorkflowsDir, writeFileAtomic } from "./scaffold.js";
 export type { CreateProjectOpts, CreateSubProjectOpts } from "./scaffold.js";
-export { generateProjectMd, generateQueueMd, generateWorkflowMd, generateTaskMd } from "./templates.js";
+export {
+  generateProjectMd,
+  generateQueueMd,
+  generateWorkflowMd,
+  generateTaskMd,
+} from "./templates.js";
 
 // Sync types
 export type { SyncEvent, ProjectIndex, TaskIndex, BoardIndex, QueueIndex } from "./sync-types.js";
@@ -73,7 +78,12 @@ export { validateCapabilities, STANDARD_CAPABILITIES } from "./capability-regist
 export type { StandardCapability } from "./capability-registry.js";
 
 // Orchestrator (decomposition validation + batch creation + goal pipeline)
-export { validateTaskGraph, createTaskBatch, orchestrateGoal, parseOrchestratorPayload } from "./orchestrator.js";
+export {
+  validateTaskGraph,
+  createTaskBatch,
+  orchestrateGoal,
+  parseOrchestratorPayload,
+} from "./orchestrator.js";
 export type {
   DecomposedTask,
   ValidationResult,
