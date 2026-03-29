@@ -57,6 +57,7 @@ completed: 2026-03-29
 - **Files modified:** 6
 
 ## Accomplishments
+
 - WorkflowFrontmatterSchema validates all WF-03 fields: id, title, status, goal, goal_check, tasks, template, created, updated
 - TaskFrontmatterSchema extended with 6 orchestration fields (workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode) with backward-compatible defaults
 - ProjectFrontmatterSchema extended with allowed_capabilities field
@@ -77,6 +78,7 @@ Each task was committed atomically:
    - `bcd4bc4` fix(01-01): update index-generator test type literals for extended schemas
 
 ## Files Created/Modified
+
 - `src/projects/schemas.ts` - Added WORKFLOW_ID_PATTERN, WorkflowFrontmatterSchema, extended TaskFrontmatterSchema and ProjectFrontmatterSchema
 - `src/projects/types.ts` - Added WorkflowFrontmatter type export
 - `src/projects/frontmatter.ts` - Added parseWorkflowFrontmatter function
@@ -85,6 +87,7 @@ Each task was committed atomically:
 - `src/projects/index-generator.test.ts` - Updated type literals to include new schema fields
 
 ## Decisions Made
+
 - Workflow status enum uses 5 states (draft, active, paused, completed, failed) matching WF-02 requirement
 - Task orchestration fields all have safe defaults so existing minimal tasks still parse without changes
 
@@ -93,6 +96,7 @@ Each task was committed atomically:
 ### Auto-fixed Issues
 
 **1. [Rule 1 - Bug] Updated index-generator test type literals**
+
 - **Found during:** Task 2 verification (typecheck)
 - **Issue:** `src/projects/index-generator.test.ts` constructs `TaskFrontmatter` and `ProjectFrontmatter` type literals that became incomplete after schema extension
 - **Fix:** Added missing orchestration fields (workflow, verification_type, etc.) and allowed_capabilities to all type literal objects
@@ -106,16 +110,20 @@ Each task was committed atomically:
 **Impact on plan:** Necessary type-level fix from schema extension. No scope creep.
 
 ## Issues Encountered
+
 None
 
 ## User Setup Required
+
 None - no external service configuration required.
 
 ## Next Phase Readiness
+
 - Schema contracts established for all downstream plans
 - Plan 01-02 (workflow templates and scaffold) can import WorkflowFrontmatterSchema and parseWorkflowFrontmatter
 - Plan 01-03 (capability registry) can use allowed_capabilities on ProjectFrontmatterSchema
 
 ---
-*Phase: 01-schema-workflow-foundation*
-*Completed: 2026-03-29*
+
+_Phase: 01-schema-workflow-foundation_
+_Completed: 2026-03-29_

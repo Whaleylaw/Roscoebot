@@ -1,5 +1,9 @@
 import YAML from "yaml";
-import { ProjectFrontmatterSchema, QueueFrontmatterSchema, WorkflowFrontmatterSchema } from "./schemas.js";
+import {
+  ProjectFrontmatterSchema,
+  QueueFrontmatterSchema,
+  WorkflowFrontmatterSchema,
+} from "./schemas.js";
 
 /**
  * Generate PROJECT.md content with valid YAML frontmatter and defaults

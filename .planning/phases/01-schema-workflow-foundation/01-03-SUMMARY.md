@@ -15,7 +15,11 @@ affects: [phase-02-orchestration, task-routing, agent-dispatch]
 
 tech-stack:
   added: []
-  patterns: ["Set-based membership validation for capability enforcement", "Backward-compatible empty-list bypass pattern"]
+  patterns:
+    [
+      "Set-based membership validation for capability enforcement",
+      "Backward-compatible empty-list bypass pattern",
+    ]
 
 key-files:
   created:
@@ -51,6 +55,7 @@ completed: 2026-03-29
 - **Files modified:** 3
 
 ## Accomplishments
+
 - validateCapabilities enforces strict project-level capability validation (D-14, D-15)
 - STANDARD_CAPABILITIES documents the five recommended starter tags (D-16)
 - Backward-compatible: empty allowed_capabilities = no restriction
@@ -65,11 +70,13 @@ Each task was committed atomically:
    - `8991505e9` (feat: TDD GREEN - implementation passing all tests)
 
 ## Files Created/Modified
+
 - `src/projects/capability-registry.ts` - validateCapabilities function and STANDARD_CAPABILITIES constant
 - `src/projects/capability-registry.test.ts` - 10 test cases covering all validation scenarios
 - `src/projects/index.ts` - Added capability registry exports to barrel
 
 ## Decisions Made
+
 - Empty allowed_capabilities means no restriction (backward compat with existing projects that have no registry)
 - Validation returns both valid boolean and unregistered string list for actionable error messages
 
@@ -78,6 +85,7 @@ Each task was committed atomically:
 None - plan executed exactly as written.
 
 ## Issues Encountered
+
 - Plan specified `-x` flag for vitest which is not supported; used `--bail 1` instead (no impact on test results)
 
 ## User Setup Required
@@ -89,11 +97,13 @@ None - no external service configuration required.
 None - all functionality is fully wired.
 
 ## Next Phase Readiness
+
 - Capability registry ready for use in Phase 2 task routing and agent dispatch
 - Complements existing matchCapabilities (agent-to-task matching) with validateCapabilities (project-level enforcement)
 
 ---
-*Phase: 01-schema-workflow-foundation*
-*Completed: 2026-03-29*
+
+_Phase: 01-schema-workflow-foundation_
+_Completed: 2026-03-29_
 
 ## Self-Check: PASSED

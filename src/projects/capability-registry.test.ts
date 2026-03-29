@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  STANDARD_CAPABILITIES,
-  validateCapabilities,
-} from "./capability-registry.js";
+import { STANDARD_CAPABILITIES, validateCapabilities } from "./capability-registry.js";
 
 describe("STANDARD_CAPABILITIES", () => {
   it("contains exactly code, research, ops, review, deploy", () => {
@@ -41,18 +38,12 @@ describe("validateCapabilities", () => {
   });
 
   it("reports all unregistered caps", () => {
-    const result = validateCapabilities(
-      ["code", "research", "deploy"],
-      ["code"],
-    );
+    const result = validateCapabilities(["code", "research", "deploy"], ["code"]);
     expect(result).toEqual({ valid: false, unregistered: ["research", "deploy"] });
   });
 
   it("handles exact match (all task caps registered)", () => {
-    const result = validateCapabilities(
-      ["code", "research"],
-      ["code", "research"],
-    );
+    const result = validateCapabilities(["code", "research"], ["code", "research"]);
     expect(result).toEqual({ valid: true, unregistered: [] });
   });
 

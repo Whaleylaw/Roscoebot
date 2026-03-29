@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
+import {
+  parseProjectFrontmatter,
+  parseQueueFrontmatter,
+  parseWorkflowFrontmatter,
+} from "./frontmatter.js";
 import { generateProjectMd, generateQueueMd, generateWorkflowMd } from "./templates.js";
-import { parseProjectFrontmatter, parseQueueFrontmatter, parseWorkflowFrontmatter } from "./frontmatter.js";
 
 describe("generateWorkflowMd", () => {
   it("produces string starting with ---", () => {

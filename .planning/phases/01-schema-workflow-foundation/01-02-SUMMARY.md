@@ -19,11 +19,21 @@ affects: [01-schema-workflow-foundation plan 03, phase-02-orchestration]
 # Tech tracking
 tech-stack:
   added: []
-  patterns: [TDD red-green for template and scaffold functions, YAML frontmatter generation via Zod schema validation]
+  patterns:
+    [
+      TDD red-green for template and scaffold functions,
+      YAML frontmatter generation via Zod schema validation,
+    ]
 
 key-files:
   created: [src/projects/templates.test.ts]
-  modified: [src/projects/templates.ts, src/projects/scaffold.ts, src/projects/scaffold.test.ts, src/projects/index.ts]
+  modified:
+    [
+      src/projects/templates.ts,
+      src/projects/scaffold.ts,
+      src/projects/scaffold.test.ts,
+      src/projects/index.ts,
+    ]
 
 key-decisions:
   - "ensureWorkflowsDir exported as standalone helper for Phase 2 orchestrator to retrofit existing projects"
@@ -53,6 +63,7 @@ completed: 2026-03-29
 - **Files modified:** 5
 
 ## Accomplishments
+
 - generateWorkflowMd produces valid WF-NNN.md with YAML frontmatter and ## Goal / ## Steps / ## Notes body sections
 - ProjectManager.create() and createSubProject() now create workflows/.gitkeep alongside tasks/.gitkeep
 - nextWorkflowId returns sequential WF-NNN IDs with 3-digit zero-padding and gap handling
@@ -71,6 +82,7 @@ Each task was committed atomically (TDD: test then feat):
    - `a227933c9` (feat: extend ProjectManager with workflows/ dir, nextWorkflowId, barrel exports)
 
 ## Files Created/Modified
+
 - `src/projects/templates.ts` - Added generateWorkflowMd function with Zod-validated YAML frontmatter
 - `src/projects/templates.test.ts` - 11 tests: 8 for generateWorkflowMd, round-trip tests for all template functions
 - `src/projects/scaffold.ts` - Added ensureWorkflowsDir, nextWorkflowId, workflows/ in create/createSubProject
@@ -78,6 +90,7 @@ Each task was committed atomically (TDD: test then feat):
 - `src/projects/index.ts` - Added barrel exports for WorkflowFrontmatterSchema, WORKFLOW_ID_PATTERN, WorkflowFrontmatter, parseWorkflowFrontmatter, generateWorkflowMd, ensureWorkflowsDir
 
 ## Decisions Made
+
 - ensureWorkflowsDir exported as a standalone function (not a class method) for flexible Phase 2 orchestrator use on existing projects
 - nextWorkflowId follows exact same max-based gap-handling pattern as nextTaskId for consistency
 
@@ -86,6 +99,7 @@ Each task was committed atomically (TDD: test then feat):
 None - plan executed exactly as written.
 
 ## Issues Encountered
+
 - Worktree was behind main repo (missing Plan 01-01 output) -- fast-forward merged to get WorkflowFrontmatterSchema
 - Vitest v4 does not support `-x` flag (plan used it) -- used `--bail 1` instead
 - Pre-existing type errors in gateway/UI files unrelated to plan changes
@@ -95,10 +109,12 @@ None - plan executed exactly as written.
 None - no external service configuration required.
 
 ## Next Phase Readiness
+
 - All workflow file generation and project scaffolding complete
 - Plan 03 (frontmatter parsing extensions) can proceed -- all barrel exports wired
 - Phase 2 orchestration can use generateWorkflowMd + ensureWorkflowsDir to create workflows in existing projects
 
 ---
-*Phase: 01-schema-workflow-foundation*
-*Completed: 2026-03-29*
+
+_Phase: 01-schema-workflow-foundation_
+_Completed: 2026-03-29_

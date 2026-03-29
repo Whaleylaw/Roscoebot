@@ -2,13 +2,7 @@
  * Standard starter capability tags (per D-16).
  * Each project defines its own set; these are documented recommendations.
  */
-export const STANDARD_CAPABILITIES = [
-  "code",
-  "research",
-  "ops",
-  "review",
-  "deploy",
-] as const;
+export const STANDARD_CAPABILITIES = ["code", "research", "ops", "review", "deploy"] as const;
 
 export type StandardCapability = (typeof STANDARD_CAPABILITIES)[number];
 
