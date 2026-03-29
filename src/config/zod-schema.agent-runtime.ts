@@ -801,6 +801,10 @@ export const AgentEntrySchema = z
     params: z.record(z.string(), z.unknown()).optional(),
     tools: AgentToolsSchema,
     runtime: AgentRuntimeSchema,
+    /** Project this agent is scoped to (D-12: project placement). */
+    project: z.string().optional(),
+    /** Capability tags for heartbeat matching (D-19: capability-based dispatch). */
+    capabilities: z.array(z.string()).optional(),
   })
   .strict();
 

@@ -2,8 +2,10 @@ import YAML from "yaml";
 import {
   ProjectFrontmatterSchema,
   QueueFrontmatterSchema,
+  TaskFrontmatterSchema,
   WorkflowFrontmatterSchema,
 } from "./schemas.js";
+import type { TaskMdBody } from "./types.js";
 
 /**
  * Generate PROJECT.md content with valid YAML frontmatter and defaults
@@ -66,4 +68,70 @@ export function generateWorkflowMd(opts: {
 
   const yaml = YAML.stringify(data, { schema: "core" });
   return `---\n${yaml}---\n\n## Goal\n\n${opts.goal}\n\n## Steps\n\n## Notes\n`;
+}
+
+/**
+ * Generate TASK-NNN.md content with valid YAML frontmatter and 5 DEC-02 body sections:
+ * Objective, Context, Action Guidance, Success Criteria, Verification.
+ */
+export function generateTaskMd(
+  opts: {
+    id: string;
+    title: string;
+    priority?: "low" | "medium" | "high" | "critical";
+    capabilities?: string[];
+    depends_on?: string[];
+    workflow?: string;
+    verification_type?: "automatic" | "human" | "external" | "mixed";
+    side_effect_class?: "none" | "reversible" | "irreversible";
+    approval_required?: boolean;
+    estimated_size?: "small" | "medium" | "large";
+    parent?: string;
+  },
+  body: TaskMdBody,
+): string {
+  const today = new Date().toISOString().split("T")[0];
+  const data = TaskFrontmatterSchema.parse({
+    id: opts.id,
+    title: opts.title,
+    status: "backlog",
+    column: "Backlog",
+    priority: opts.priority ?? "medium",
+    capabilities: opts.capabilities ?? [],
+    depends_on: opts.depends_on ?? [],
+    workflow: opts.workflow ?? null,
+    verification_type: opts.verification_type ?? "automatic",
+    side_effect_class: opts.side_effect_class ?? "none",
+    approval_required: opts.approval_required ?? false,
+    estimated_size: opts.estimated_size ?? "medium",
+    parent: opts.parent ?? null,
+    created: today,
+    updated: today,
+  });
+
+  const yaml = YAML.stringify(data, { schema: "core" });
+  return [
+    `---\n${yaml}---`,
+    "",
+    "## Objective",
+    "",
+    body.objective,
+    "",
+    "## Context",
+    "",
+    body.context,
+    "",
+    "## Action Guidance",
+    "",
+    body.actionGuidance,
+    "",
+    "## Success Criteria",
+    "",
+    body.successCriteria,
+    "",
+    "## Verification",
+    "",
+    body.verificationMethod,
+    "",
+  ].join("\n");
 }

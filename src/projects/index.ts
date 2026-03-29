@@ -15,6 +15,7 @@ export type {
   WorkflowFrontmatter,
   ParseResult,
   ParseError,
+  TaskMdBody,
 } from "./types.js";
 
 // Errors
@@ -36,7 +37,7 @@ export type { QueueEntry, ParsedQueue } from "./queue-parser.js";
 // Scaffold
 export { ProjectManager, ensureWorkflowsDir } from "./scaffold.js";
 export type { CreateProjectOpts, CreateSubProjectOpts } from "./scaffold.js";
-export { generateProjectMd, generateQueueMd, generateWorkflowMd } from "./templates.js";
+export { generateProjectMd, generateQueueMd, generateWorkflowMd, generateTaskMd } from "./templates.js";
 
 // Sync types
 export type { SyncEvent, ProjectIndex, TaskIndex, BoardIndex, QueueIndex } from "./sync-types.js";

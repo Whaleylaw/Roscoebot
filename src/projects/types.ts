@@ -18,3 +18,12 @@ export type ParseError = {
 };
 
 export type ParseResult<T> = { success: true; data: T } | { success: false; error: ParseError };
+
+/** Body sections for a generated task markdown file (DEC-02 standard). */
+export type TaskMdBody = {
+  objective: string;
+  context: string;
+  actionGuidance: string;
+  successCriteria: string;
+  verificationMethod: string;
+};
