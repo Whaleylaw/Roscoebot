@@ -137,61 +137,61 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WF-01 | TBD | Pending |
-| WF-02 | TBD | Pending |
-| WF-03 | TBD | Pending |
-| WF-04 | TBD | Pending |
-| DEC-01 | TBD | Pending |
-| DEC-02 | TBD | Pending |
-| DEC-03 | TBD | Pending |
-| DEC-04 | TBD | Pending |
-| QUE-01 | TBD | Pending |
-| QUE-02 | TBD | Pending |
-| QUE-03 | TBD | Pending |
-| QUE-04 | TBD | Pending |
-| PRG-01 | TBD | Pending |
-| PRG-02 | TBD | Pending |
-| PRG-03 | TBD | Pending |
-| VER-01 | TBD | Pending |
-| VER-02 | TBD | Pending |
-| VER-03 | TBD | Pending |
-| VER-04 | TBD | Pending |
-| VER-05 | TBD | Pending |
-| REC-01 | TBD | Pending |
-| REC-02 | TBD | Pending |
-| REC-03 | TBD | Pending |
-| REC-04 | TBD | Pending |
-| REC-05 | TBD | Pending |
-| RSM-01 | TBD | Pending |
-| RSM-02 | TBD | Pending |
-| RSM-03 | TBD | Pending |
-| HIL-01 | TBD | Pending |
-| HIL-02 | TBD | Pending |
-| HIL-03 | TBD | Pending |
-| HIL-04 | TBD | Pending |
-| PPL-01 | TBD | Pending |
-| PPL-02 | TBD | Pending |
-| PPL-03 | TBD | Pending |
-| TPL-01 | TBD | Pending |
-| TPL-02 | TBD | Pending |
-| TPL-03 | TBD | Pending |
-| SYN-01 | TBD | Pending |
-| SYN-02 | TBD | Pending |
-| SYN-03 | TBD | Pending |
-| CAP-01 | TBD | Pending |
-| CAP-02 | TBD | Pending |
-| CAP-03 | TBD | Pending |
-| ORC-01 | TBD | Pending |
-| ORC-02 | TBD | Pending |
-| ORC-03 | TBD | Pending |
-| ORC-04 | TBD | Pending |
-| ORC-05 | TBD | Pending |
+| WF-01 | Phase 1 | Pending |
+| WF-02 | Phase 1 | Pending |
+| WF-03 | Phase 1 | Pending |
+| WF-04 | Phase 1 | Pending |
+| DEC-01 | Phase 2 | Pending |
+| DEC-02 | Phase 2 | Pending |
+| DEC-03 | Phase 2 | Pending |
+| DEC-04 | Phase 1 | Pending |
+| QUE-01 | Phase 2 | Pending |
+| QUE-02 | Phase 2 | Pending |
+| QUE-03 | Phase 2 | Pending |
+| QUE-04 | Phase 2 | Pending |
+| PRG-01 | Phase 6 | Pending |
+| PRG-02 | Phase 6 | Pending |
+| PRG-03 | Phase 6 | Pending |
+| VER-01 | Phase 3 | Pending |
+| VER-02 | Phase 3 | Pending |
+| VER-03 | Phase 3 | Pending |
+| VER-04 | Phase 3 | Pending |
+| VER-05 | Phase 3 | Pending |
+| REC-01 | Phase 4 | Pending |
+| REC-02 | Phase 4 | Pending |
+| REC-03 | Phase 4 | Pending |
+| REC-04 | Phase 4 | Pending |
+| REC-05 | Phase 4 | Pending |
+| RSM-01 | Phase 4 | Pending |
+| RSM-02 | Phase 4 | Pending |
+| RSM-03 | Phase 4 | Pending |
+| HIL-01 | Phase 3 | Pending |
+| HIL-02 | Phase 3 | Pending |
+| HIL-03 | Phase 3 | Pending |
+| HIL-04 | Phase 3 | Pending |
+| PPL-01 | Phase 5 | Pending |
+| PPL-02 | Phase 5 | Pending |
+| PPL-03 | Phase 5 | Pending |
+| TPL-01 | Phase 5 | Pending |
+| TPL-02 | Phase 5 | Pending |
+| TPL-03 | Phase 5 | Pending |
+| SYN-01 | Phase 5 | Pending |
+| SYN-02 | Phase 5 | Pending |
+| SYN-03 | Phase 5 | Pending |
+| CAP-01 | Phase 1 | Pending |
+| CAP-02 | Phase 2 | Pending |
+| CAP-03 | Phase 2 | Pending |
+| ORC-01 | Phase 2 | Pending |
+| ORC-02 | Phase 2 | Pending |
+| ORC-03 | Phase 2 | Pending |
+| ORC-04 | Phase 2 | Pending |
+| ORC-05 | Phase 2 | Pending |
 
 **Coverage:**
-- v1 requirements: 47 total
-- Mapped to phases: 0
-- Unmapped: 47
+- v1 requirements: 49 total
+- Mapped to phases: 49
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after initial definition*
+*Last updated: 2026-03-28 after roadmap creation*
