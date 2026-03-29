@@ -72,6 +72,10 @@ export { matchCapabilities } from "./capability-matcher.js";
 export { validateCapabilities, STANDARD_CAPABILITIES } from "./capability-registry.js";
 export type { StandardCapability } from "./capability-registry.js";
 
+// Orchestrator (decomposition validation)
+export { validateTaskGraph } from "./orchestrator.js";
+export type { DecomposedTask, ValidationResult } from "./orchestrator.js";
+
 // Checkpoint (interruption/resume support)
 export { createCheckpoint, readCheckpoint, writeCheckpoint, checkpointPath } from "./checkpoint.js";
 export type { CheckpointData } from "./checkpoint.js";
