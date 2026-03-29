@@ -202,6 +202,105 @@ describe("verification-hook", () => {
     expect(result.outcome).toBe("done");
   });
 
+  // ====================================================================
+  // Task 3: human, external, mixed verification branches
+  // ====================================================================
+
+  it("verification_type=human -> task moves to Review directly, no auto checks run", async () => {
+    const { projectDir, taskId } = await setupProject({
+      verification_type: "human",
+      // success_criteria present but should NOT be run for human type
+      success_criteria: [{ type: "file_exists", path: "nonexistent.txt" }],
+    });
+
+    const result = await handleTaskPreComplete({
+      taskId,
+      workflowId: null,
+      projectDir,
+      agentId: "agent-1",
+    });
+
+    expect(result.outcome).toBe("review");
+
+    const queueContent = await fs.readFile(path.join(projectDir, "queue.md"), "utf8");
+    const parsed = parseQueue(queueContent, "queue.md");
+    expect(parsed.review.some((e) => e.taskId === taskId)).toBe(true);
+
+    // Checkpoint should have pending human review, no auto checks ran
+    const taskPath = path.join(projectDir, "tasks", `${taskId}.md`);
+    const cp = await readCheckpoint(checkpointPath(taskPath));
+    expect(cp!.verification?.human_review?.status).toBe("pending");
+    expect(cp!.verification?.checks).toEqual([]);
+  });
+
+  it("verification_type=external -> task moves to Review directly (same as human per D-14)", async () => {
+    const { projectDir, taskId } = await setupProject({
+      verification_type: "external",
+      success_criteria: [{ type: "file_exists", path: "nonexistent.txt" }],
+    });
+
+    const result = await handleTaskPreComplete({
+      taskId,
+      workflowId: null,
+      projectDir,
+      agentId: "agent-1",
+    });
+
+    expect(result.outcome).toBe("review");
+
+    const queueContent = await fs.readFile(path.join(projectDir, "queue.md"), "utf8");
+    const parsed = parseQueue(queueContent, "queue.md");
+    expect(parsed.review.some((e) => e.taskId === taskId)).toBe(true);
+  });
+
+  it("verification_type=mixed + auto checks pass -> task moves to Review with evidence", async () => {
+    const { projectDir, taskId } = await setupProject({
+      verification_type: "mixed",
+      success_criteria: [{ type: "command", cmd: "echo ok", expect: 0 }],
+    });
+
+    const result = await handleTaskPreComplete({
+      taskId,
+      workflowId: null,
+      projectDir,
+      agentId: "agent-1",
+    });
+
+    expect(result.outcome).toBe("review");
+
+    const queueContent = await fs.readFile(path.join(projectDir, "queue.md"), "utf8");
+    const parsed = parseQueue(queueContent, "queue.md");
+    expect(parsed.review.some((e) => e.taskId === taskId)).toBe(true);
+
+    // Checkpoint should have evidence and pending human review
+    const taskPath = path.join(projectDir, "tasks", `${taskId}.md`);
+    const cp = await readCheckpoint(checkpointPath(taskPath));
+    expect(cp!.verification?.passed).toBe(true);
+    expect(cp!.verification?.human_review?.status).toBe("pending");
+    expect(cp!.verification?.checks.length).toBeGreaterThan(0);
+  });
+
+  it("verification_type=mixed + auto checks fail -> task moves to Available (not Review)", async () => {
+    const { projectDir, taskId } = await setupProject({
+      verification_type: "mixed",
+      success_criteria: [{ type: "file_exists", path: "nonexistent.txt" }],
+    });
+
+    const result = await handleTaskPreComplete({
+      taskId,
+      workflowId: null,
+      projectDir,
+      agentId: "agent-1",
+    });
+
+    expect(result.outcome).toBe("available");
+
+    const queueContent = await fs.readFile(path.join(projectDir, "queue.md"), "utf8");
+    const parsed = parseQueue(queueContent, "queue.md");
+    expect(parsed.available.some((e) => e.taskId === taskId)).toBe(true);
+    expect(parsed.review.some((e) => e.taskId === taskId)).toBe(false);
+  });
+
   it("handleTaskPreComplete returns { outcome } discriminated result", async () => {
     const { projectDir, taskId } = await setupProject({
       verification_type: "automatic",
