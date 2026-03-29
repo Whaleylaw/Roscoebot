@@ -2,7 +2,13 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, describe, it, expect, vi } from "vitest";
-import { validateTaskGraph, createTaskBatch, type DecomposedTask } from "./orchestrator.js";
+import {
+  validateTaskGraph,
+  createTaskBatch,
+  orchestrateGoal,
+  parseOrchestratorPayload,
+  type DecomposedTask,
+} from "./orchestrator.js";
 import { generateWorkflowMd, generateQueueMd, generateProjectMd } from "./templates.js";
 import { parseWorkflowFrontmatter } from "./frontmatter.js";
 import { parseQueue } from "./queue-parser.js";
@@ -415,5 +421,206 @@ describe("createTaskBatch", () => {
     expect(task2Content).toContain("TASK-001");
     // Should not contain the batch-local ID
     expect(task2Content).not.toContain("batch-1");
+  });
+});
+
+describe("orchestrateGoal", () => {
+  let tmpDir: string;
+
+  async function setupProject(): Promise<string> {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "orch-goal-"));
+    const projectDir = tmpDir;
+    await fs.mkdir(path.join(projectDir, "tasks"), { recursive: true });
+    await fs.mkdir(path.join(projectDir, "workflows"), { recursive: true });
+    await fs.writeFile(
+      path.join(projectDir, "PROJECT.md"),
+      generateProjectMd({ name: "test-project" }),
+      "utf-8",
+    );
+    await fs.writeFile(
+      path.join(projectDir, "queue.md"),
+      generateQueueMd(),
+      "utf-8",
+    );
+    return projectDir;
+  }
+
+  afterEach(async () => {
+    if (tmpDir) {
+      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("creates workflow file, task files, and queue entries", async () => {
+    const projectDir = await setupProject();
+    const tasks: DecomposedTask[] = [
+      makeTask({ id: "batch-1", title: "First task" }),
+      makeTask({ id: "batch-2", title: "Second task", depends_on: ["batch-1"] }),
+    ];
+
+    const result = await orchestrateGoal({
+      projectDir,
+      goal: "Build the feature",
+      goalTitle: "Feature Build",
+      tasks,
+      agentCapabilities: new Map(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // Workflow file exists
+    const wfPath = path.join(projectDir, "workflows", `${result.workflowId}.md`);
+    const wfContent = await fs.readFile(wfPath, "utf-8");
+    expect(wfContent).toContain("Build the feature");
+
+    // Workflow is active (not draft)
+    const wfParsed = parseWorkflowFrontmatter(wfContent, wfPath);
+    expect(wfParsed.success).toBe(true);
+    if (wfParsed.success) {
+      expect(wfParsed.data.status).toBe("active");
+      expect(wfParsed.data.tasks).toHaveLength(2);
+    }
+
+    // Task files exist
+    expect(result.taskIds).toHaveLength(2);
+    for (const taskId of result.taskIds) {
+      const exists = await fs.access(path.join(projectDir, "tasks", `${taskId}.md`)).then(() => true).catch(() => false);
+      expect(exists).toBe(true);
+    }
+
+    // Queue entries exist
+    const queueContent = await fs.readFile(path.join(projectDir, "queue.md"), "utf-8");
+    const queueParsed = parseQueue(queueContent, "queue.md");
+    expect(queueParsed.available).toHaveLength(2);
+  });
+
+  it("with circular deps returns error without creating any files", async () => {
+    const projectDir = await setupProject();
+    const tasks: DecomposedTask[] = [
+      makeTask({ id: "batch-1", depends_on: ["batch-2"] }),
+      makeTask({ id: "batch-2", depends_on: ["batch-1"] }),
+    ];
+
+    const result = await orchestrateGoal({
+      projectDir,
+      goal: "Circular goal",
+      goalTitle: "Circular",
+      tasks,
+      agentCapabilities: new Map(),
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.includes("Circular dependency"))).toBe(true);
+    }
+
+    // No workflow files created
+    const wfEntries = await fs.readdir(path.join(projectDir, "workflows"));
+    const wfFiles = wfEntries.filter((e) => e.endsWith(".md"));
+    expect(wfFiles).toHaveLength(0);
+  });
+
+  it("with unmatched capability returns error listing the capability", async () => {
+    const projectDir = await setupProject();
+    // Write PROJECT.md with restricted capabilities
+    const projectContent = generateProjectMd({ name: "test-project" });
+    const updatedProject = projectContent.replace(
+      "allowed_capabilities: []",
+      "allowed_capabilities:\n  - code\n  - research",
+    );
+    await fs.writeFile(path.join(projectDir, "PROJECT.md"), updatedProject, "utf-8");
+
+    const tasks: DecomposedTask[] = [
+      makeTask({ id: "batch-1", capabilities: ["exotic-cap"] }),
+    ];
+
+    const result = await orchestrateGoal({
+      projectDir,
+      goal: "Cap test",
+      goalTitle: "Capabilities",
+      tasks,
+      agentCapabilities: new Map([["agent-a", ["code"]]]),
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors.some((e) => e.includes("exotic-cap"))).toBe(true);
+    }
+  });
+});
+
+describe("parseOrchestratorPayload", () => {
+  const validPayload = {
+    type: "orchestrate",
+    goal: "Build a feature",
+    goalTitle: "Feature Build",
+    project: "my-project",
+    projectDir: "/tmp/projects/my-project",
+  };
+
+  it("valid JSON returns { ok: true } with all fields", () => {
+    const result = parseOrchestratorPayload(JSON.stringify(validPayload));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.payload.goal).toBe("Build a feature");
+      expect(result.payload.goalTitle).toBe("Feature Build");
+      expect(result.payload.project).toBe("my-project");
+      expect(result.payload.projectDir).toBe("/tmp/projects/my-project");
+      expect(result.payload.type).toBe("orchestrate");
+    }
+  });
+
+  it("missing goal field returns { ok: false }", () => {
+    const payload = { ...validPayload, goal: undefined };
+    const result = parseOrchestratorPayload(JSON.stringify(payload));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("goal");
+    }
+  });
+
+  it("non-JSON string returns { ok: false }", () => {
+    const result = parseOrchestratorPayload("not json at all");
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("JSON");
+    }
+  });
+
+  it("unknown type field returns { ok: false }", () => {
+    const payload = { ...validPayload, type: "unknown-type" };
+    const result = parseOrchestratorPayload(JSON.stringify(payload));
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain("type");
+    }
+  });
+
+  it("constraints with maxTasks and preferredCapabilities are preserved", () => {
+    const payload = {
+      ...validPayload,
+      constraints: {
+        maxTasks: 10,
+        preferredCapabilities: ["code", "research"],
+        sideEffectPolicy: "ask-irreversible",
+      },
+    };
+    const result = parseOrchestratorPayload(JSON.stringify(payload));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.payload.constraints?.maxTasks).toBe(10);
+      expect(result.payload.constraints?.preferredCapabilities).toEqual(["code", "research"]);
+      expect(result.payload.constraints?.sideEffectPolicy).toBe("ask-irreversible");
+    }
+  });
+
+  it("empty constraints object is fine", () => {
+    const payload = { ...validPayload, constraints: {} };
+    const result = parseOrchestratorPayload(JSON.stringify(payload));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.payload.constraints).toEqual({});
+    }
   });
 });

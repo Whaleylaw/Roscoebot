@@ -72,9 +72,18 @@ export { matchCapabilities } from "./capability-matcher.js";
 export { validateCapabilities, STANDARD_CAPABILITIES } from "./capability-registry.js";
 export type { StandardCapability } from "./capability-registry.js";
 
-// Orchestrator (decomposition validation + batch creation)
-export { validateTaskGraph, createTaskBatch } from "./orchestrator.js";
-export type { DecomposedTask, ValidationResult, CreateTaskBatchOpts, CreateTaskBatchResult } from "./orchestrator.js";
+// Orchestrator (decomposition validation + batch creation + goal pipeline)
+export { validateTaskGraph, createTaskBatch, orchestrateGoal, parseOrchestratorPayload } from "./orchestrator.js";
+export type {
+  DecomposedTask,
+  ValidationResult,
+  CreateTaskBatchOpts,
+  CreateTaskBatchResult,
+  OrchestrateGoalOpts,
+  OrchestrateGoalResult,
+  OrchestratorPayload,
+  ParsePayloadResult,
+} from "./orchestrator.js";
 
 // Checkpoint (interruption/resume support)
 export { createCheckpoint, readCheckpoint, writeCheckpoint, checkpointPath } from "./checkpoint.js";

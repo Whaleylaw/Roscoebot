@@ -3,10 +3,10 @@ import path from "node:path";
 import YAML from "yaml";
 import { validateCapabilities } from "./capability-registry.js";
 import { matchCapabilities } from "./capability-matcher.js";
-import { parseWorkflowFrontmatter } from "./frontmatter.js";
+import { parseProjectFrontmatter, parseWorkflowFrontmatter } from "./frontmatter.js";
 import { QueueManager } from "./queue-manager.js";
-import { writeFileAtomic } from "./scaffold.js";
-import { generateTaskMd } from "./templates.js";
+import { ensureWorkflowsDir, ProjectManager, writeFileAtomic } from "./scaffold.js";
+import { generateTaskMd, generateWorkflowMd } from "./templates.js";
 
 /**
  * A decomposed task ready for queue entry and agent dispatch.
@@ -345,4 +345,194 @@ export async function createTaskBatch(
     }
     throw err;
   }
+}
+
+// --- orchestrateGoal pipeline ---
+
+export type OrchestrateGoalOpts = {
+  projectDir: string;
+  goal: string;
+  goalTitle: string;
+  tasks: DecomposedTask[];
+  agentCapabilities: Map<string, string[]>;
+};
+
+export type OrchestrateGoalResult =
+  | { ok: true; workflowId: string; taskIds: string[] }
+  | { ok: false; errors: string[] };
+
+/**
+ * Update a workflow file's frontmatter `status` field.
+ * Re-serializes YAML and preserves the markdown body.
+ */
+async function updateWorkflowStatus(
+  projectDir: string,
+  workflowId: string,
+  newStatus: string,
+): Promise<void> {
+  const wfPath = path.join(projectDir, "workflows", `${workflowId}.md`);
+  const content = await fs.readFile(wfPath, "utf-8");
+
+  const parsed = parseWorkflowFrontmatter(content, wfPath);
+  if (!parsed.success) {
+    throw new Error(`Failed to parse workflow frontmatter: ${parsed.error.message}`);
+  }
+
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const endIdx = normalized.indexOf("\n---", 3);
+  const body = normalized.slice(endIdx + 4);
+
+  const updatedFm = {
+    ...parsed.data,
+    status: newStatus,
+    updated: new Date().toISOString().split("T")[0],
+  };
+  const yamlStr = YAML.stringify(updatedFm, { schema: "core" });
+  const newContent = `---\n${yamlStr}---${body}`;
+
+  await writeFileAtomic(wfPath, newContent);
+}
+
+/**
+ * Top-level orchestration pipeline: validate task graph, create workflow file,
+ * batch-create task files + queue entries, activate the workflow.
+ *
+ * Returns errors without side effects if validation fails.
+ */
+export async function orchestrateGoal(
+  opts: OrchestrateGoalOpts,
+): Promise<OrchestrateGoalResult> {
+  const { projectDir, goal, goalTitle, tasks, agentCapabilities } = opts;
+
+  // Step 1: Read project allowed_capabilities
+  const projectMdPath = path.join(projectDir, "PROJECT.md");
+  const projectContent = await fs.readFile(projectMdPath, "utf8");
+  const projectResult = parseProjectFrontmatter(projectContent, projectMdPath);
+  const allowedCapabilities = projectResult.success
+    ? projectResult.data.allowed_capabilities
+    : [];
+
+  // Step 2: Validate task graph
+  const validation = validateTaskGraph(tasks, {
+    allowedCapabilities,
+    agentCapabilities,
+  });
+  if (!validation.valid) {
+    return { ok: false, errors: validation.errors };
+  }
+
+  // Step 3: Ensure workflows directory exists
+  await ensureWorkflowsDir(projectDir);
+
+  // Step 4: Create workflow file
+  const pm = new ProjectManager();
+  const wfId = await pm.nextWorkflowId(projectDir);
+  const wfContent = generateWorkflowMd({
+    id: wfId,
+    title: goalTitle,
+    goal,
+  });
+  const wfPath = path.join(projectDir, "workflows", `${wfId}.md`);
+  await writeFileAtomic(wfPath, wfContent);
+
+  // Step 5: Batch create tasks
+  try {
+    const result = await createTaskBatch({
+      projectDir,
+      workflowId: wfId,
+      tasks,
+    });
+
+    // Step 6: Activate workflow (update status from draft to active)
+    await updateWorkflowStatus(projectDir, wfId, "active");
+
+    return { ok: true, workflowId: wfId, taskIds: result.taskIds };
+  } catch (err) {
+    // Clean up workflow file on failure
+    await fs.unlink(wfPath).catch(() => {});
+    throw err;
+  }
+}
+
+// --- parseOrchestratorPayload (ORC-02 sessions_send adapter) ---
+
+export type OrchestratorPayload = {
+  type: "orchestrate";
+  goal: string;
+  goalTitle: string;
+  project: string;
+  projectDir: string;
+  constraints?: {
+    maxTasks?: number;
+    preferredCapabilities?: string[];
+    sideEffectPolicy?: "auto" | "ask-irreversible" | "ask-all";
+  };
+};
+
+export type ParsePayloadResult =
+  | { ok: true; payload: OrchestratorPayload }
+  | { ok: false; error: string };
+
+/**
+ * Validate and extract a structured payload from a sessions_send message.
+ * This is the contract that the main agent's sessions_send call must satisfy (ORC-02).
+ */
+export function parseOrchestratorPayload(message: string): ParsePayloadResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(message);
+  } catch {
+    return { ok: false, error: "Message is not valid JSON" };
+  }
+
+  if (typeof parsed !== "object" || parsed === null) {
+    return { ok: false, error: "Message is not a JSON object" };
+  }
+
+  const obj = parsed as Record<string, unknown>;
+
+  if (obj.type !== "orchestrate") {
+    return { ok: false, error: `Unknown payload type: ${String(obj.type)}` };
+  }
+  if (typeof obj.goal !== "string" || obj.goal.length === 0) {
+    return { ok: false, error: "Missing or empty 'goal' field" };
+  }
+  if (typeof obj.goalTitle !== "string" || obj.goalTitle.length === 0) {
+    return { ok: false, error: "Missing or empty 'goalTitle' field" };
+  }
+  if (typeof obj.project !== "string" || obj.project.length === 0) {
+    return { ok: false, error: "Missing or empty 'project' field" };
+  }
+  if (typeof obj.projectDir !== "string" || obj.projectDir.length === 0) {
+    return { ok: false, error: "Missing or empty 'projectDir' field" };
+  }
+
+  const payload: OrchestratorPayload = {
+    type: "orchestrate",
+    goal: obj.goal,
+    goalTitle: obj.goalTitle,
+    project: obj.project,
+    projectDir: obj.projectDir,
+  };
+
+  // Parse optional constraints
+  if (obj.constraints && typeof obj.constraints === "object") {
+    const c = obj.constraints as Record<string, unknown>;
+    payload.constraints = {};
+    if (typeof c.maxTasks === "number") payload.constraints.maxTasks = c.maxTasks;
+    if (Array.isArray(c.preferredCapabilities)) {
+      payload.constraints.preferredCapabilities = c.preferredCapabilities.filter(
+        (v): v is string => typeof v === "string",
+      );
+    }
+    if (
+      typeof c.sideEffectPolicy === "string" &&
+      ["auto", "ask-irreversible", "ask-all"].includes(c.sideEffectPolicy)
+    ) {
+      payload.constraints.sideEffectPolicy = c.sideEffectPolicy as
+        "auto" | "ask-irreversible" | "ask-all";
+    }
+  }
+
+  return { ok: true, payload };
 }
