@@ -1,101 +1,85 @@
-# OpenClaw Project Management System
+# GSD-Style Orchestration Layer for Roscoebot
 
 ## What This Is
 
-A local, markdown-based project management system for OpenClaw that enables humans and agents to create, track, and collaborate on projects through structured files on disk. Projects live in `~/.openclaw/projects/`, are readable/writable by any agent, and are surfaced through a new Projects tab in the web UI. This is a feature addition to an existing, mature TypeScript platform (OpenClaw) — not a standalone product.
+A workflow orchestration intelligence layer built on top of Roscoebot's existing project/task/queue/checkpoint system. It turns vague user goals into well-structured, executable, verifiable work — handling intake, decomposition, workflow selection/generation, agent dispatch, verification, and recovery. The existing project system remains the canonical source of truth; this layer adds orchestration discipline on top.
 
 ## Core Value
 
-Agents and humans can seamlessly track, claim, and execute project work through structured markdown files that survive context compaction and agent interruptions.
+A user describes a goal in natural language and the system produces structured, executable, verifiable project work end-to-end — from intake through completion — without replacing the existing project system.
 
 ## Requirements
 
 ### Validated
 
-<!-- Shipped and confirmed valuable. -->
-
-- ✓ OpenClaw gateway with WebSocket protocol — existing
-- ✓ Lit-based web UI with sidebar navigation — existing
-- ✓ Agent system with SOUL.md, AGENTS.md, IDENTITY.md bootstrap files — existing
-- ✓ Post-compaction context system reads from cwd (AGENTS.md) — existing
-- ✓ agent:bootstrap hook system for per-session file injection — existing
-- ✓ Heartbeat system for periodic agent tasks — existing
-- ✓ Plugin/extension architecture with SDK contracts — existing
+(None yet — ship to validate)
 
 ### Active
 
-<!-- Current scope. Building toward these. -->
-
-- [ ] Project folder structure at `~/.openclaw/projects/` with PROJECT.md, queue.md, tasks/
-- [ ] Sub-project support (one level deep)
-- [ ] YAML frontmatter on PROJECT.md and task files for structured metadata
-- [ ] Auto-generated `.index/` JSON from markdown via file watcher sync process
-- [x] PROJECT.md context injection via cwd-based pickup (extend post-compaction loader)
-- [x] PROJECT.md context injection via channel hook (agent:bootstrap hook)
-- [x] Capability tags in agent IDENTITY.md for work routing
-- [x] Heartbeat task pickup — agents scan queue.md, match capabilities, claim work
-- [x] File-level .lock for concurrent queue write prevention
-- [ ] Kanban board state in task frontmatter (configurable columns with defaults)
-- [ ] Task files with checkpoint and log sections for interruption/resume
-- [x] WebSocket events from file watcher for near-real-time UI updates
-- [ ] Sidebar "Projects" tab in web UI
-- [ ] Project list view (reads .index/project.json per project)
-- [ ] Project dashboard with configurable widgets per project
-- [ ] Read-only kanban board with live agent indicators and session peek
-- [ ] CLI: `openclaw projects create`, `list`, `status`, `reindex`
+- [ ] First-class workflow files (workflows/WF-NNN.md) within projects, linked to tasks
+- [ ] Orchestration agent type that the main agent can spawn for project/workflow coordination
+- [ ] Project placement logic: determine existing project vs new project vs sub-project
+- [ ] Workflow selection: match requests to known markdown-based workflow templates
+- [ ] Workflow synthesis: generate tailored workflows from freeform user goals when no template fits
+- [ ] Task decomposition: break workflows into low-ambiguity, execution-ready tasks with deps and capabilities
+- [ ] Task authoring standard: objective, context, action guidance, success criteria, verification method, expected outputs
+- [ ] Task frontmatter extensions: workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode
+- [ ] Orchestration execution: coordinate task dispatch across workers/subagents, respect dependencies, parallel when safe
+- [ ] Verification framework: structured verification types (automatic, human, external, mixed) with evidence recording
+- [ ] Recovery policy: retry, decompose further, reroute, block, or escalate with anti-loop budget
+- [ ] Checkpoint integration: leverage existing checkpoint system for interruption/resume across sessions
+- [ ] Domain-agnostic design: support coding, research, planning, operations, and mixed workflows
+- [ ] Workflow templates: reusable markdown workflow starter patterns
+- [ ] Queue/board state coherence: orchestration updates project/task/queue state natively
 
 ### Out of Scope
 
-<!-- Explicit boundaries. Includes reasoning to prevent re-adding. -->
-
-- Drag-and-drop kanban — Phase 2, after read-only board proves the data model
-- Workflow state machine engine — Phase 2, builds on Phase 1 task/queue foundation
-- Orchestration agent creating workflows — Phase 2, needs workflow engine first
-- Project manager agent stale detection loop — Phase 2, needs agent-to-agent messaging
-- Workflow templates — Phase 2, needs workflow engine
-- Agent-proposed tasks — Phase 2, needs approval UI
-- Sub-sub-projects — keeps structure flat and navigable; one level is sufficient
-- Database/SQLite for project state — markdown is the source of truth for agent accessibility
+- Replacing the existing project system — orchestration composes with it
+- Building a parallel artifact framework that bypasses projects/tasks/queue
+- Implementing every GSD command literally — borrow concepts, not implementation
+- Full autonomous production rollout before validation
+- Large UI rewrites — prefer existing board/queue surfaces
+- Code-only assumptions — the system must work for non-coding work
 
 ## Context
 
-**Existing codebase:** OpenClaw is a mature TypeScript (ESM) platform with:
+Roscoebot already has a durable project system with: project CRUD commands, task frontmatter (id, title, status, priority, capabilities, depends_on, claimed_by, parent), queue management with heartbeat scanning, checkpoint sidecars for resume, .index-based JSON for board/queue/UI, and gateway WebSocket RPC exposure.
 
-- **UI:** Lit 3.x web components, Vite 8.x build, sidebar with tab groups (Chat, Control, Agent, Settings)
-- **Navigation:** `ui/src/ui/navigation.ts` defines sidebar tabs and routing
-- **Gateway:** WebSocket server at `127.0.0.1:18789`, typed event system
-- **Agents:** Bootstrap files (SOUL.md, AGENTS.md, USER.md, IDENTITY.md, TOOLS.md) loaded from `~/.openclaw/workspace/`
-- **Context injection:** `src/auto-reply/reply/post-compaction-context.ts` reads AGENTS.md from `process.cwd()` — this is the seam for PROJECT.md pickup
-- **Hooks:** `src/agents/bootstrap-hooks.ts` — `agent:bootstrap` hook allows per-session file injection
-- **Config:** `~/.openclaw/openclaw.json`, state dir at `~/.openclaw/`
-- **File watching:** No existing project file watcher, but gateway has WebSocket event emission infrastructure
+The gap is between a user expressing a meaningful objective and that objective becoming well-structured executable work. Today that translation is manual or loosely conversational. For large or ambiguous work, the system needs orchestration that can interpret intent, place work, generate workflows, decompose into tasks, coordinate agents, and enforce verification/recovery.
 
-**Design spec:** Full design at `docs/superpowers/specs/2026-03-26-project-management-design.md`
+Key reference patterns informing this work:
 
-**Architecture pattern:** Markdown + Auto-Generated JSON. Agents write markdown (single source of truth). UI reads auto-generated JSON from `.index/`. If JSON corrupts, delete `.index/` and regenerate.
+- **GSD**: bounded execution units, explicit planning before execution, verification mentality, resumability
+- **writing-plans**: decomposition into concrete handoff-ready steps, low-executor-context assumption
+- **Eigent/workforce**: planner/coordinator distinction, task/subtask hierarchy, worker specialization, retry/decompose/escalate loop
+
+### Existing system reference points
+
+- `src/projects/` — project management module (types, schemas, frontmatter, queue, checkpoint, scaffold)
+- `src/commands/projects.*.ts` — CLI commands
+- `src/gateway/server-methods/projects.ts` — gateway RPC methods
+- `src/agents/project-context-hook.ts` — agent bootstrap with PROJECT.md injection
+- Projects live at `~/.openclaw/projects/{name}/` with PROJECT.md, queue.md, tasks/, .index/
 
 ## Constraints
 
-- **Tech stack**: TypeScript (ESM), Lit 3.x for UI, must follow existing patterns (Oxlint, Oxfmt, Vitest)
-- **Runtime**: Node 22+, keep Bun paths working
-- **Compatibility**: Must not break existing agent bootstrap flow — extend, don't replace
-- **File size**: Keep files under ~700 LOC per CLAUDE.md guidelines
-- **Testing**: Vitest with V8 coverage, colocated `*.test.ts` files, forks pool only
-- **Plugin boundaries**: New code lives in core (`src/`) and UI (`ui/`), not as an extension — this is a platform feature
+- **Platform**: Must compose with existing project/task/queue/checkpoint primitives — no parallel storage
+- **Schema**: Prefer thin schema additions over heavy new subsystems
+- **Templates**: Markdown-based workflow templates (consistent with tasks/projects format)
+- **Orchestrator**: Dedicated agent type spawned by main agent
+- **Workflows**: First-class files (workflows/WF-NNN.md) within project directories
+- **Domain**: Must be domain-agnostic from day one (coding, research, ops, mixed)
+- **Language**: TypeScript (ESM), consistent with existing codebase
 
 ## Key Decisions
 
-| Decision                                       | Rationale                                                                       | Outcome   |
-| ---------------------------------------------- | ------------------------------------------------------------------------------- | --------- |
-| Markdown + auto-generated JSON                 | Agents write markdown natively; UI reads JSON for speed; single source of truth | — Pending |
-| Projects at `~/.openclaw/projects/`            | Central location alongside existing config; not per-repo                        | — Pending |
-| PROJECT.md (not AGENTS.md) for project context | Avoids collision with industry-standard AGENTS.md in repos; unambiguous         | — Pending |
-| Capability tags over agent name matching       | More flexible; agents can fulfill multiple roles                                | Phase 5   |
-| File-level .lock for queue writes              | Simple concurrency without database; lock held only during brief write          | — Pending |
-| Configurable columns with defaults             | Projects have different needs; Backlog/In Progress/Review/Done as default       | — Pending |
-| Configurable dashboard widgets                 | No one-size-fits-all; good defaults with per-project override                   | — Pending |
-| Read-only kanban in Phase 1                    | Prove data model before adding interaction complexity                           | — Pending |
-| PM agent investigates stale tasks (Phase 2)    | Prevents false positives from timer-based detection; tries revival first        | — Pending |
+| Decision                              | Rationale                                                                                                      | Outcome    |
+| ------------------------------------- | -------------------------------------------------------------------------------------------------------------- | ---------- |
+| First-class workflow files (Option B) | Explicit workflow entities enable better template support, clearer orchestration targets, and future promotion | -- Pending |
+| Orchestration as dedicated agent type | Separates concerns, gives orchestrator its own context window, composable with main agent                      | -- Pending |
+| Markdown workflow templates           | Consistent with existing project/task format, human-readable, agent-parseable                                  | -- Pending |
+| End-to-end MVP proof point            | Proves the full loop (intake -> decompose -> execute -> verify) even if shallow                                | -- Pending |
+| Domain-agnostic from day one          | Avoids code-only assumptions that would need rearchitecting later                                              | -- Pending |
 
 ## Evolution
 
@@ -103,11 +87,11 @@ This document evolves at phase transitions and milestone boundaries.
 
 **After each phase transition** (via `/gsd:transition`):
 
-1. Requirements invalidated? → Move to Out of Scope with reason
-2. Requirements validated? → Move to Validated with phase reference
-3. New requirements emerged? → Add to Active
-4. Decisions to log? → Add to Key Decisions
-5. "What This Is" still accurate? → Update if drifted
+1. Requirements invalidated? -> Move to Out of Scope with reason
+2. Requirements validated? -> Move to Validated with phase reference
+3. New requirements emerged? -> Add to Active
+4. Decisions to log? -> Add to Key Decisions
+5. "What This Is" still accurate? -> Update if drifted
 
 **After each milestone** (via `/gsd:complete-milestone`):
 
@@ -118,4 +102,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-03-28 after Phase 7 (Gateway Service) completion_
+_Last updated: 2026-03-28 after initialization_
