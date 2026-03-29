@@ -368,9 +368,10 @@ describe("createTaskBatch", () => {
     const projectDir = await setupProject();
     await createWorkflow(projectDir, "WF-001");
 
-    // Make workflow file unwritable to trigger updateWorkflowTasks failure
-    const wfPath = path.join(projectDir, "workflows", "WF-001.md");
-    await fs.chmod(wfPath, 0o444);
+    // Remove the workflow file entirely so updateWorkflowTasks fails on read.
+    // Queue addTasks will succeed first (queue.md exists), then the workflow
+    // update will throw ENOENT.
+    await fs.unlink(path.join(projectDir, "workflows", "WF-001.md"));
 
     await expect(
       createTaskBatch({
@@ -380,19 +381,20 @@ describe("createTaskBatch", () => {
       }),
     ).rejects.toThrow();
 
-    // Verify task files were cleaned up
+    // Verify task files were cleaned up (deleted by the catch block)
     const entries = await fs.readdir(path.join(projectDir, "tasks"));
     const taskFiles = entries.filter((e) => e.startsWith("TASK-"));
     expect(taskFiles).toHaveLength(0);
 
     // Orphaned queue entries are accepted; heartbeat scanner still finds valid task files via queue entries.
-    // Queue entries may remain because addTasks succeeded before the workflow update failed.
+    // Queue entries remain because addTasks succeeded before the workflow update failed.
     // This is documented as accepted behavior since:
     // (a) the queue entries still reference valid task IDs,
     // (b) the caller (orchestrateGoal) can re-run updateWorkflowTasks to fix.
-
-    // Restore permissions for cleanup
-    await fs.chmod(wfPath, 0o644);
+    const queueContent = await fs.readFile(path.join(projectDir, "queue.md"), "utf-8");
+    const queueParsed = parseQueue(queueContent, "queue.md");
+    // Queue entries should still be present (orphaned)
+    expect(queueParsed.available.length).toBeGreaterThan(0);
   });
 
   it("remaps batch-local depends_on to real task IDs", async () => {

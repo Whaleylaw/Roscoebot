@@ -35,7 +35,7 @@ export { parseQueue } from "./queue-parser.js";
 export type { QueueEntry, ParsedQueue } from "./queue-parser.js";
 
 // Scaffold
-export { ProjectManager, ensureWorkflowsDir } from "./scaffold.js";
+export { ProjectManager, ensureWorkflowsDir, writeFileAtomic } from "./scaffold.js";
 export type { CreateProjectOpts, CreateSubProjectOpts } from "./scaffold.js";
 export { generateProjectMd, generateQueueMd, generateWorkflowMd, generateTaskMd } from "./templates.js";
 
@@ -72,9 +72,9 @@ export { matchCapabilities } from "./capability-matcher.js";
 export { validateCapabilities, STANDARD_CAPABILITIES } from "./capability-registry.js";
 export type { StandardCapability } from "./capability-registry.js";
 
-// Orchestrator (decomposition validation)
-export { validateTaskGraph } from "./orchestrator.js";
-export type { DecomposedTask, ValidationResult } from "./orchestrator.js";
+// Orchestrator (decomposition validation + batch creation)
+export { validateTaskGraph, createTaskBatch } from "./orchestrator.js";
+export type { DecomposedTask, ValidationResult, CreateTaskBatchOpts, CreateTaskBatchResult } from "./orchestrator.js";
 
 // Checkpoint (interruption/resume support)
 export { createCheckpoint, readCheckpoint, writeCheckpoint, checkpointPath } from "./checkpoint.js";

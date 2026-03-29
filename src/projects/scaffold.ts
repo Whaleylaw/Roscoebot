@@ -34,7 +34,7 @@ export async function ensureWorkflowsDir(projectDir: string): Promise<void> {
 }
 
 /** Write file atomically via tmp+rename to avoid partial reads. */
-async function writeFileAtomic(filePath: string, content: string): Promise<void> {
+export async function writeFileAtomic(filePath: string, content: string): Promise<void> {
   const tmpPath = `${filePath}.${randomUUID()}.tmp`;
   await fs.writeFile(tmpPath, content, "utf-8");
   await fs.rename(tmpPath, filePath);

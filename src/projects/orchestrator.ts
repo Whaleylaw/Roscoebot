@@ -1,5 +1,12 @@
+import fs from "node:fs/promises";
+import path from "node:path";
+import YAML from "yaml";
 import { validateCapabilities } from "./capability-registry.js";
 import { matchCapabilities } from "./capability-matcher.js";
+import { parseWorkflowFrontmatter } from "./frontmatter.js";
+import { QueueManager } from "./queue-manager.js";
+import { writeFileAtomic } from "./scaffold.js";
+import { generateTaskMd } from "./templates.js";
 
 /**
  * A decomposed task ready for queue entry and agent dispatch.
@@ -162,4 +169,180 @@ export function validateTaskGraph(
     return { valid: true };
   }
   return { valid: false, errors };
+}
+
+// --- Batch task creation pipeline ---
+
+export type CreateTaskBatchOpts = {
+  projectDir: string;
+  workflowId: string;
+  tasks: DecomposedTask[];
+};
+
+export type CreateTaskBatchResult = {
+  taskIds: string[];
+  rollback: () => Promise<void>;
+};
+
+/**
+ * Scan tasks/ directory for existing TASK-NNN.md files and return the
+ * next sequential number. Returns 1 if no tasks exist.
+ */
+async function getNextTaskNum(tasksDir: string): Promise<number> {
+  let entries: string[];
+  try {
+    entries = await fs.readdir(tasksDir);
+  } catch {
+    return 1;
+  }
+
+  const pattern = /^TASK-(\d+)\.md$/;
+  let maxId = 0;
+  for (const entry of entries) {
+    const match = pattern.exec(entry);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (num > maxId) {
+        maxId = num;
+      }
+    }
+  }
+  return maxId + 1;
+}
+
+/**
+ * Update a workflow file's frontmatter `tasks` array by appending new task IDs.
+ * Re-serializes the YAML frontmatter and preserves the markdown body.
+ */
+async function updateWorkflowTasks(
+  projectDir: string,
+  workflowId: string,
+  newTaskIds: string[],
+): Promise<void> {
+  const wfPath = path.join(projectDir, "workflows", `${workflowId}.md`);
+  const content = await fs.readFile(wfPath, "utf-8");
+
+  const parsed = parseWorkflowFrontmatter(content, wfPath);
+  if (!parsed.success) {
+    throw new Error(`Failed to parse workflow frontmatter: ${parsed.error.message}`);
+  }
+
+  // Append new task IDs to existing list
+  const updatedTasks = [...parsed.data.tasks, ...newTaskIds];
+  const updatedFrontmatter = { ...parsed.data, tasks: updatedTasks };
+
+  // Extract body after the closing --- fence
+  const normalized = content.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+  const endIdx = normalized.indexOf("\n---", 3);
+  const bodyStart = endIdx + 4; // skip past "\n---"
+  const body = normalized.slice(bodyStart);
+
+  const yamlStr = YAML.stringify(updatedFrontmatter, { schema: "core" });
+  const newContent = `---\n${yamlStr}---${body}`;
+
+  await writeFileAtomic(wfPath, newContent);
+}
+
+/**
+ * Atomically create task files, add queue entries, and update workflow frontmatter.
+ *
+ * Rollback: if any step fails, previously created task files are cleaned up.
+ *
+ * ACCEPTED LIMITATION: If updateWorkflowTasks fails after addTasks succeeds,
+ * queue entries become orphans (present in queue.md but workflow.tasks[] not updated).
+ * This is accepted because:
+ * (a) the queue entries still reference valid task files,
+ * (b) heartbeat scanner will find and claim them,
+ * (c) adding queue entry rollback would require re-parsing and rewriting queue.md
+ *     under lock which adds complexity disproportionate to the failure mode
+ *     (workflow file corruption is very rare).
+ * The caller (orchestrateGoal in Plan 04) can re-run updateWorkflowTasks to fix.
+ */
+export async function createTaskBatch(
+  opts: CreateTaskBatchOpts,
+): Promise<CreateTaskBatchResult> {
+  const { projectDir, workflowId, tasks } = opts;
+  const qm = new QueueManager(projectDir);
+  const createdFiles: string[] = [];
+
+  try {
+    // Step 1: Generate sequential task IDs
+    const tasksDir = path.join(projectDir, "tasks");
+    await fs.mkdir(tasksDir, { recursive: true });
+
+    const nextNum = await getNextTaskNum(tasksDir);
+    const taskIds: string[] = [];
+    for (let i = 0; i < tasks.length; i++) {
+      taskIds.push(`TASK-${String(nextNum + i).padStart(3, "0")}`);
+    }
+
+    // Step 2: Write all task files atomically
+    for (let i = 0; i < tasks.length; i++) {
+      const task = tasks[i];
+      const taskId = taskIds[i];
+      const filePath = path.join(tasksDir, `${taskId}.md`);
+
+      // Remap depends_on from batch-local IDs to real task IDs
+      const realDepsOn = task.depends_on.map((dep) => {
+        const depIdx = tasks.findIndex((t) => t.id === dep);
+        return depIdx >= 0 ? taskIds[depIdx] : dep;
+      });
+
+      // Remap parent from batch-local ID to real task ID
+      let realParent: string | null = task.parent;
+      if (realParent) {
+        const parentIdx = tasks.findIndex((t) => t.id === realParent);
+        if (parentIdx >= 0) realParent = taskIds[parentIdx];
+      }
+
+      const content = generateTaskMd(
+        {
+          id: taskId,
+          title: task.title,
+          priority: task.priority,
+          capabilities: task.capabilities,
+          depends_on: realDepsOn,
+          workflow: workflowId,
+          verification_type: task.verification_type,
+          side_effect_class: task.side_effect_class,
+          approval_required: task.approval_required,
+          estimated_size: task.estimated_size,
+          parent: realParent ?? undefined,
+        },
+        task.body,
+      );
+      await writeFileAtomic(filePath, content);
+      createdFiles.push(filePath);
+    }
+
+    // Step 3: Add all entries to queue
+    await qm.addTasks(
+      taskIds.map((id, i) => ({
+        taskId: id,
+        metadata: {
+          priority: tasks[i].priority ?? "medium",
+          capabilities: tasks[i].capabilities.join(", "),
+        },
+      })),
+    );
+
+    // Step 4: Update workflow frontmatter tasks[] list
+    await updateWorkflowTasks(projectDir, workflowId, taskIds);
+
+    const rollback = async () => {
+      for (const f of createdFiles) {
+        await fs.unlink(f).catch(() => {});
+      }
+      // Note: queue entries and workflow update are harder to roll back
+      // but task file deletion is the critical cleanup
+    };
+
+    return { taskIds, rollback };
+  } catch (err) {
+    // Rollback: delete any created task files
+    for (const f of createdFiles) {
+      await fs.unlink(f).catch(() => {});
+    }
+    throw err;
+  }
 }
