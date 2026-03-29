@@ -297,6 +297,91 @@ describe("QueueManager.addTasks", () => {
   });
 });
 
+describe("review queue section", () => {
+  it("serializeQueue round-trips a queue with entries in the review section", async () => {
+    const parsed = {
+      frontmatter: { updated: "2026-03-29" },
+      available: [],
+      claimed: [],
+      review: [{ taskId: "TASK-001", metadata: { agent: "bot-a" } }],
+      done: [],
+      blocked: [],
+    };
+    const serialized = serializeQueue(parsed);
+    const reparsed = parseQueue(serialized, "queue.md");
+
+    expect(reparsed.review).toHaveLength(1);
+    expect(reparsed.review[0].taskId).toBe("TASK-001");
+    expect(reparsed.review[0].metadata.agent).toBe("bot-a");
+  });
+
+  it("parseQueue parses a queue.md containing a ## Review section with task entries", () => {
+    const content = `---\nupdated: "2026-03-29"\n---\n\n## Available\n\n## Claimed\n\n## Review\n\n- TASK-005 [status: pending]\n\n## Done\n\n## Blocked\n`;
+    const parsed = parseQueue(content, "queue.md");
+
+    expect(parsed.review).toHaveLength(1);
+    expect(parsed.review[0].taskId).toBe("TASK-005");
+    expect(parsed.review[0].metadata.status).toBe("pending");
+  });
+
+  it("QueueManager.moveTask can move a task from claimed to review", async () => {
+    await writeTestQueue(["TASK-001"]);
+    const mgr = new QueueManager(tmpDir);
+
+    await mgr.claimTask("TASK-001", "agent-a");
+    await mgr.moveTask("TASK-001", "claimed", "review");
+
+    const result = await mgr.readQueue();
+    expect(result.claimed.find((e) => e.taskId === "TASK-001")).toBeUndefined();
+    expect(result.review.find((e) => e.taskId === "TASK-001")).toBeDefined();
+  });
+
+  it("QueueManager.moveTask can move a task from review to done", async () => {
+    await writeTestQueue(["TASK-001"]);
+    const mgr = new QueueManager(tmpDir);
+
+    await mgr.claimTask("TASK-001", "agent-a");
+    await mgr.moveTask("TASK-001", "claimed", "review");
+    await mgr.moveTask("TASK-001", "review", "done");
+
+    const result = await mgr.readQueue();
+    expect(result.review.find((e) => e.taskId === "TASK-001")).toBeUndefined();
+    expect(result.done.find((e) => e.taskId === "TASK-001")).toBeDefined();
+  });
+
+  it("QueueManager.moveTask can move a task from review to available", async () => {
+    await writeTestQueue(["TASK-001"]);
+    const mgr = new QueueManager(tmpDir);
+
+    await mgr.claimTask("TASK-001", "agent-a");
+    await mgr.moveTask("TASK-001", "claimed", "review");
+    await mgr.moveTask("TASK-001", "review", "available");
+
+    const result = await mgr.readQueue();
+    expect(result.review.find((e) => e.taskId === "TASK-001")).toBeUndefined();
+    expect(result.available.find((e) => e.taskId === "TASK-001")).toBeDefined();
+  });
+
+  it("empty review section serializes correctly", () => {
+    const parsed = {
+      frontmatter: { updated: "2026-03-29" },
+      available: [],
+      claimed: [],
+      review: [],
+      done: [],
+      blocked: [],
+    };
+    const serialized = serializeQueue(parsed);
+    expect(serialized).toContain("## Review");
+  });
+
+  it("existing queue files without ## Review section parse with review=[]", () => {
+    const content = `---\nupdated: "2026-03-29"\n---\n\n## Available\n\n- TASK-001\n\n## Claimed\n\n## Done\n\n## Blocked\n`;
+    const parsed = parseQueue(content, "queue.md");
+    expect(parsed.review).toEqual([]);
+  });
+});
+
 describe("concurrent access", () => {
   /** Write a queue.md with specific tasks in the Available section. */
   async function writeQueueWithTasks(dir: string, taskIds: string[]): Promise<void> {
