@@ -3,11 +3,13 @@ import type {
   ProjectFrontmatterSchema,
   QueueFrontmatterSchema,
   TaskFrontmatterSchema,
+  WorkflowFrontmatterSchema,
 } from "./schemas.js";
 
 export type ProjectFrontmatter = z.infer<typeof ProjectFrontmatterSchema>;
 export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema>;
 export type QueueFrontmatter = z.infer<typeof QueueFrontmatterSchema>;
+export type WorkflowFrontmatter = z.infer<typeof WorkflowFrontmatterSchema>;
 
 export type ParseError = {
   filePath: string;
