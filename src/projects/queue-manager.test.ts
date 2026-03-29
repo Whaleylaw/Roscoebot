@@ -225,6 +225,78 @@ describe("QUEUE_LOCK_OPTIONS", () => {
   });
 });
 
+describe("QueueManager.addTasks", () => {
+  it("adds 3 entries to Available section", async () => {
+    await writeTestQueue([]);
+    const mgr = new QueueManager(tmpDir);
+
+    const entries = [
+      { taskId: "TASK-010", metadata: {} },
+      { taskId: "TASK-011", metadata: {} },
+      { taskId: "TASK-012", metadata: {} },
+    ];
+    await mgr.addTasks(entries);
+
+    const result = await mgr.readQueue();
+    expect(result.available).toHaveLength(3);
+    expect(result.available.map((e) => e.taskId)).toEqual(["TASK-010", "TASK-011", "TASK-012"]);
+  });
+
+  it("empty array is a no-op (does not throw, does not modify queue)", async () => {
+    await writeTestQueue(["TASK-001"]);
+    const mgr = new QueueManager(tmpDir);
+
+    await mgr.addTasks([]);
+
+    const result = await mgr.readQueue();
+    expect(result.available).toHaveLength(1);
+    expect(result.available[0].taskId).toBe("TASK-001");
+  });
+
+  it("preserves existing Available entries (appends, does not replace)", async () => {
+    await writeTestQueue(["TASK-001", "TASK-002"]);
+    const mgr = new QueueManager(tmpDir);
+
+    await mgr.addTasks([{ taskId: "TASK-003", metadata: {} }]);
+
+    const result = await mgr.readQueue();
+    expect(result.available).toHaveLength(3);
+    expect(result.available[0].taskId).toBe("TASK-001");
+    expect(result.available[1].taskId).toBe("TASK-002");
+    expect(result.available[2].taskId).toBe("TASK-003");
+  });
+
+  it("metadata (priority, capabilities) round-trips correctly", async () => {
+    await writeTestQueue([]);
+    const mgr = new QueueManager(tmpDir);
+
+    await mgr.addTasks([
+      { taskId: "TASK-050", metadata: { priority: "high", capabilities: "code, testing" } },
+    ]);
+
+    const result = await mgr.readQueue();
+    expect(result.available).toHaveLength(1);
+    expect(result.available[0].taskId).toBe("TASK-050");
+    expect(result.available[0].metadata.priority).toBe("high");
+    expect(result.available[0].metadata.capabilities).toBe("code, testing");
+  });
+
+  it("duplicate taskId in entries still adds (no uniqueness check at queue level)", async () => {
+    await writeTestQueue([]);
+    const mgr = new QueueManager(tmpDir);
+
+    await mgr.addTasks([
+      { taskId: "TASK-001", metadata: {} },
+      { taskId: "TASK-001", metadata: { priority: "high" } },
+    ]);
+
+    const result = await mgr.readQueue();
+    expect(result.available).toHaveLength(2);
+    expect(result.available[0].taskId).toBe("TASK-001");
+    expect(result.available[1].taskId).toBe("TASK-001");
+  });
+});
+
 describe("concurrent access", () => {
   /** Write a queue.md with specific tasks in the Available section. */
   async function writeQueueWithTasks(dir: string, taskIds: string[]): Promise<void> {

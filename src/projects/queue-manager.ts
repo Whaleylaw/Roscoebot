@@ -209,6 +209,27 @@ export class QueueManager {
     );
   }
 
+  /** Add multiple task entries to the Available section atomically. */
+  async addTasks(entries: QueueEntry[]): Promise<void> {
+    if (entries.length === 0) return;
+
+    await this.lockedWriteOp(
+      (parsed) => ({
+        ...parsed,
+        available: [...parsed.available, ...entries],
+      }),
+      (reRead) => {
+        for (const entry of entries) {
+          if (!reRead.available.some((e) => e.taskId === entry.taskId)) {
+            throw new QueueValidationError(
+              `Post-write validation failed: ${entry.taskId} not found in Available`,
+            );
+          }
+        }
+      },
+    );
+  }
+
   /** Move a task between arbitrary sections. */
   async moveTask(
     taskId: string,
