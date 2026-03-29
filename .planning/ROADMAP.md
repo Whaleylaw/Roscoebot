@@ -40,7 +40,7 @@ Plans:
 
 - [x] 01-01-PLAN.md -- Schemas, types, and parser (WorkflowFrontmatterSchema, extended Task/Project schemas, parseWorkflowFrontmatter)
 - [ ] 01-02-PLAN.md -- Templates, scaffold, and exports (generateWorkflowMd, nextWorkflowId, workflows/ dir, barrel exports)
-- [ ] 01-03-PLAN.md -- Capability registry (validateCapabilities, STANDARD_CAPABILITIES)
+- [x] 01-03-PLAN.md -- Capability registry (validateCapabilities, STANDARD_CAPABILITIES)
 
 ### Phase 2: Orchestrator, Decomposition & Queue Integration
 

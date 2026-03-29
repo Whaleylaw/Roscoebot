@@ -83,7 +83,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Capability Model
 
-- [ ] **CAP-01**: Tasks have capability tags (code, research, ops, review, deploy, etc.) that are domain-agnostic
+- [x] **CAP-01**: Tasks have capability tags (code, research, ops, review, deploy, etc.) that are domain-agnostic
 - [ ] **CAP-02**: Orchestrator dispatches tasks to workers with matching capabilities
 - [ ] **CAP-03**: Capability matching is extensible — new capability types can be added without code changes
 
@@ -178,7 +178,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYN-01      | Phase 5 | Pending |
 | SYN-02      | Phase 5 | Pending |
 | SYN-03      | Phase 5 | Pending |
-| CAP-01      | Phase 1 | Pending |
+| CAP-01      | Phase 1 | Complete |
 | CAP-02      | Phase 2 | Pending |
 | CAP-03      | Phase 2 | Pending |
 | ORC-01      | Phase 2 | Pending |
