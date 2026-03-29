@@ -9,9 +9,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Workflow Foundation
 
-- [ ] **WF-01**: Workflow files (WF-NNN.md) exist as first-class entities within project directories with YAML frontmatter and markdown body
-- [ ] **WF-02**: Workflow files have a defined lifecycle: draft, active, paused, completed, failed
-- [ ] **WF-03**: Workflow frontmatter includes: id, title, status, goal, created, updated, tasks (list of TASK-IDs), template (optional source template)
+- [x] **WF-01**: Workflow files (WF-NNN.md) exist as first-class entities within project directories with YAML frontmatter and markdown body
+- [x] **WF-02**: Workflow files have a defined lifecycle: draft, active, paused, completed, failed
+- [x] **WF-03**: Workflow frontmatter includes: id, title, status, goal, created, updated, tasks (list of TASK-IDs), template (optional source template)
 - [ ] **WF-04**: Workflow directory (workflows/) is created within project directories alongside tasks/
 
 ### Decomposition
@@ -19,7 +19,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **DEC-01**: Orchestrator can decompose a user goal into a set of executable tasks with dependencies, capabilities, and success criteria
 - [ ] **DEC-02**: Decomposed tasks are low-ambiguity: each includes objective, context, action guidance, success criteria, and verification method
 - [ ] **DEC-03**: Decomposition is shallow by default (2 levels max) with adaptive decompose-on-failure for deeper breakdown
-- [ ] **DEC-04**: Task frontmatter is extended with: workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode
+- [x] **DEC-04**: Task frontmatter is extended with: workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode
 
 ### Task Creation and Queue Integration
 
@@ -119,79 +119,81 @@ Deferred to future release. Tracked but not in current roadmap.
 
 ## Out of Scope
 
-| Feature | Reason |
-|---------|--------|
-| Parallel artifact/state system | Orchestration composes with existing project system; no separate state store |
-| Full durable execution runtime (Temporal-style) | Massive infra complexity; checkpoint-based resumability is sufficient |
-| Visual workflow builder / DAG editor | UI complexity explosion; markdown files are the "editor" |
-| Unstructured agent-to-agent negotiation | Agents use sessions_send for coordination; no free-form negotiation or bidding |
-| Deep decomposition chains (>3 levels) | Research shows deep chains increase failure probability and lose coherence |
-| Custom DSL for workflow definition | Markdown + frontmatter is the existing pattern; no new language |
-| Real-time multi-agent negotiation | Adds latency and non-determinism; orchestrator assigns directly |
-| Workflow versioning / branching | Workflows are ephemeral coordination artifacts, not source code |
-| Autonomous production deployment | Irreversible actions always require human gates |
+| Feature                                         | Reason                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| Parallel artifact/state system                  | Orchestration composes with existing project system; no separate state store   |
+| Full durable execution runtime (Temporal-style) | Massive infra complexity; checkpoint-based resumability is sufficient          |
+| Visual workflow builder / DAG editor            | UI complexity explosion; markdown files are the "editor"                       |
+| Unstructured agent-to-agent negotiation         | Agents use sessions_send for coordination; no free-form negotiation or bidding |
+| Deep decomposition chains (>3 levels)           | Research shows deep chains increase failure probability and lose coherence     |
+| Custom DSL for workflow definition              | Markdown + frontmatter is the existing pattern; no new language                |
+| Real-time multi-agent negotiation               | Adds latency and non-determinism; orchestrator assigns directly                |
+| Workflow versioning / branching                 | Workflows are ephemeral coordination artifacts, not source code                |
+| Autonomous production deployment                | Irreversible actions always require human gates                                |
 
 ## Traceability
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement | Phase | Status |
-|-------------|-------|--------|
-| WF-01 | Phase 1 | Pending |
-| WF-02 | Phase 1 | Pending |
-| WF-03 | Phase 1 | Pending |
-| WF-04 | Phase 1 | Pending |
-| DEC-01 | Phase 2 | Pending |
-| DEC-02 | Phase 2 | Pending |
-| DEC-03 | Phase 2 | Pending |
-| DEC-04 | Phase 1 | Pending |
-| QUE-01 | Phase 2 | Pending |
-| QUE-02 | Phase 2 | Pending |
-| QUE-03 | Phase 2 | Pending |
-| QUE-04 | Phase 2 | Pending |
-| PRG-01 | Phase 6 | Pending |
-| PRG-02 | Phase 6 | Pending |
-| PRG-03 | Phase 6 | Pending |
-| VER-01 | Phase 3 | Pending |
-| VER-02 | Phase 3 | Pending |
-| VER-03 | Phase 3 | Pending |
-| VER-04 | Phase 3 | Pending |
-| VER-05 | Phase 3 | Pending |
-| REC-01 | Phase 4 | Pending |
-| REC-02 | Phase 4 | Pending |
-| REC-03 | Phase 4 | Pending |
-| REC-04 | Phase 4 | Pending |
-| REC-05 | Phase 4 | Pending |
-| RSM-01 | Phase 4 | Pending |
-| RSM-02 | Phase 4 | Pending |
-| RSM-03 | Phase 4 | Pending |
-| HIL-01 | Phase 3 | Pending |
-| HIL-02 | Phase 3 | Pending |
-| HIL-03 | Phase 3 | Pending |
-| HIL-04 | Phase 3 | Pending |
-| PPL-01 | Phase 5 | Pending |
-| PPL-02 | Phase 5 | Pending |
-| PPL-03 | Phase 5 | Pending |
-| TPL-01 | Phase 5 | Pending |
-| TPL-02 | Phase 5 | Pending |
-| TPL-03 | Phase 5 | Pending |
-| SYN-01 | Phase 5 | Pending |
-| SYN-02 | Phase 5 | Pending |
-| SYN-03 | Phase 5 | Pending |
-| CAP-01 | Phase 1 | Pending |
-| CAP-02 | Phase 2 | Pending |
-| CAP-03 | Phase 2 | Pending |
-| ORC-01 | Phase 2 | Pending |
-| ORC-02 | Phase 2 | Pending |
-| ORC-03 | Phase 2 | Pending |
-| ORC-04 | Phase 2 | Pending |
-| ORC-05 | Phase 2 | Pending |
+| Requirement | Phase   | Status  |
+| ----------- | ------- | ------- |
+| WF-01       | Phase 1 | Complete |
+| WF-02       | Phase 1 | Complete |
+| WF-03       | Phase 1 | Complete |
+| WF-04       | Phase 1 | Pending |
+| DEC-01      | Phase 2 | Pending |
+| DEC-02      | Phase 2 | Pending |
+| DEC-03      | Phase 2 | Pending |
+| DEC-04      | Phase 1 | Complete |
+| QUE-01      | Phase 2 | Pending |
+| QUE-02      | Phase 2 | Pending |
+| QUE-03      | Phase 2 | Pending |
+| QUE-04      | Phase 2 | Pending |
+| PRG-01      | Phase 6 | Pending |
+| PRG-02      | Phase 6 | Pending |
+| PRG-03      | Phase 6 | Pending |
+| VER-01      | Phase 3 | Pending |
+| VER-02      | Phase 3 | Pending |
+| VER-03      | Phase 3 | Pending |
+| VER-04      | Phase 3 | Pending |
+| VER-05      | Phase 3 | Pending |
+| REC-01      | Phase 4 | Pending |
+| REC-02      | Phase 4 | Pending |
+| REC-03      | Phase 4 | Pending |
+| REC-04      | Phase 4 | Pending |
+| REC-05      | Phase 4 | Pending |
+| RSM-01      | Phase 4 | Pending |
+| RSM-02      | Phase 4 | Pending |
+| RSM-03      | Phase 4 | Pending |
+| HIL-01      | Phase 3 | Pending |
+| HIL-02      | Phase 3 | Pending |
+| HIL-03      | Phase 3 | Pending |
+| HIL-04      | Phase 3 | Pending |
+| PPL-01      | Phase 5 | Pending |
+| PPL-02      | Phase 5 | Pending |
+| PPL-03      | Phase 5 | Pending |
+| TPL-01      | Phase 5 | Pending |
+| TPL-02      | Phase 5 | Pending |
+| TPL-03      | Phase 5 | Pending |
+| SYN-01      | Phase 5 | Pending |
+| SYN-02      | Phase 5 | Pending |
+| SYN-03      | Phase 5 | Pending |
+| CAP-01      | Phase 1 | Pending |
+| CAP-02      | Phase 2 | Pending |
+| CAP-03      | Phase 2 | Pending |
+| ORC-01      | Phase 2 | Pending |
+| ORC-02      | Phase 2 | Pending |
+| ORC-03      | Phase 2 | Pending |
+| ORC-04      | Phase 2 | Pending |
+| ORC-05      | Phase 2 | Pending |
 
 **Coverage:**
+
 - v1 requirements: 49 total
 - Mapped to phases: 49
 - Unmapped: 0
 
 ---
-*Requirements defined: 2026-03-28*
-*Last updated: 2026-03-28 after roadmap creation*
+
+_Requirements defined: 2026-03-28_
+_Last updated: 2026-03-28 after roadmap creation_
