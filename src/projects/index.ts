@@ -3,6 +3,8 @@ export {
   ProjectFrontmatterSchema,
   TaskFrontmatterSchema,
   QueueFrontmatterSchema,
+  WorkflowFrontmatterSchema,
+  WORKFLOW_ID_PATTERN,
 } from "./schemas.js";
 
 // Types
@@ -10,6 +12,7 @@ export type {
   ProjectFrontmatter,
   TaskFrontmatter,
   QueueFrontmatter,
+  WorkflowFrontmatter,
   ParseResult,
   ParseError,
 } from "./types.js";
@@ -23,6 +26,7 @@ export {
   parseProjectFrontmatter,
   parseTaskFrontmatter,
   parseQueueFrontmatter,
+  parseWorkflowFrontmatter,
 } from "./frontmatter.js";
 
 // Queue
@@ -30,9 +34,9 @@ export { parseQueue } from "./queue-parser.js";
 export type { QueueEntry, ParsedQueue } from "./queue-parser.js";
 
 // Scaffold
-export { ProjectManager } from "./scaffold.js";
+export { ProjectManager, ensureWorkflowsDir } from "./scaffold.js";
 export type { CreateProjectOpts, CreateSubProjectOpts } from "./scaffold.js";
-export { generateProjectMd, generateQueueMd } from "./templates.js";
+export { generateProjectMd, generateQueueMd, generateWorkflowMd } from "./templates.js";
 
 // Sync types
 export type { SyncEvent, ProjectIndex, TaskIndex, BoardIndex, QueueIndex } from "./sync-types.js";

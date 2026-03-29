@@ -3,7 +3,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import YAML from "yaml";
 import { createTempHomeEnv, type TempHomeEnv } from "../test-utils/temp-home.js";
-import { ProjectManager } from "./scaffold.js";
+import { ensureWorkflowsDir, ProjectManager } from "./scaffold.js";
 import { ProjectFrontmatterSchema } from "./schemas.js";
 
 describe("ProjectManager", () => {
@@ -199,6 +199,87 @@ describe("ProjectManager", () => {
       );
       const entries = await fs.readdir(subProjectsDir);
       expect(entries.toSorted()).toEqual(["alpha", "beta"]);
+    });
+  });
+
+  describe("workflows/ directory creation", () => {
+    it("create() produces workflows/.gitkeep", async () => {
+      const pm = new ProjectManager(env.home);
+      const dir = await pm.create({ name: "wf-test" });
+      await fs.access(path.join(dir, "workflows", ".gitkeep"));
+    });
+
+    it("createSubProject() produces workflows/.gitkeep", async () => {
+      const pm = new ProjectManager(env.home);
+      await pm.create({ name: "parent-wf" });
+      const subDir = await pm.createSubProject({ name: "sub-wf", parent: "parent-wf" });
+      await fs.access(path.join(subDir, "workflows", ".gitkeep"));
+    });
+  });
+
+  describe("nextWorkflowId", () => {
+    it("returns WF-001 for empty workflows dir", async () => {
+      const pm = new ProjectManager(env.home);
+      const dir = await pm.create({ name: "wfid-test" });
+      const id = await pm.nextWorkflowId(dir);
+      expect(id).toBe("WF-001");
+    });
+
+    it("returns WF-001 when workflows/ does not exist", async () => {
+      const pm = new ProjectManager(env.home);
+      const dir = await pm.create({ name: "wfid-test" });
+      // Remove workflows/ entirely
+      await fs.rm(path.join(dir, "workflows"), { recursive: true });
+      const id = await pm.nextWorkflowId(dir);
+      expect(id).toBe("WF-001");
+    });
+
+    it("returns WF-002 when WF-001.md exists", async () => {
+      const pm = new ProjectManager(env.home);
+      const dir = await pm.create({ name: "wfid-test" });
+      await fs.writeFile(path.join(dir, "workflows", "WF-001.md"), "---\nid: WF-001\n---\n");
+      const id = await pm.nextWorkflowId(dir);
+      expect(id).toBe("WF-002");
+    });
+
+    it("handles gaps by using max (WF-001 + WF-003 -> WF-004)", async () => {
+      const pm = new ProjectManager(env.home);
+      const dir = await pm.create({ name: "wfid-test" });
+      const wfDir = path.join(dir, "workflows");
+      await fs.writeFile(path.join(wfDir, "WF-001.md"), "---\nid: WF-001\n---\n");
+      await fs.writeFile(path.join(wfDir, "WF-003.md"), "---\nid: WF-003\n---\n");
+      const id = await pm.nextWorkflowId(dir);
+      expect(id).toBe("WF-004");
+    });
+
+    it("ignores non-workflow files in workflows/", async () => {
+      const pm = new ProjectManager(env.home);
+      const dir = await pm.create({ name: "wfid-test" });
+      const wfDir = path.join(dir, "workflows");
+      await fs.writeFile(path.join(wfDir, "README.md"), "# Notes\n");
+      await fs.writeFile(path.join(wfDir, "notes.txt"), "some notes\n");
+      await fs.writeFile(path.join(wfDir, "WF-001.md"), "---\nid: WF-001\n---\n");
+      const id = await pm.nextWorkflowId(dir);
+      expect(id).toBe("WF-002");
+    });
+  });
+
+  describe("ensureWorkflowsDir", () => {
+    it("creates workflows/.gitkeep when missing", async () => {
+      const pm = new ProjectManager(env.home);
+      const dir = await pm.create({ name: "ensure-test" });
+      // Remove workflows/ to simulate pre-existing project without it
+      await fs.rm(path.join(dir, "workflows"), { recursive: true });
+      await ensureWorkflowsDir(dir);
+      await fs.access(path.join(dir, "workflows", ".gitkeep"));
+    });
+
+    it("is a no-op when workflows/.gitkeep already exists", async () => {
+      const pm = new ProjectManager(env.home);
+      const dir = await pm.create({ name: "ensure-noop" });
+      // workflows/ already exists from create()
+      await ensureWorkflowsDir(dir);
+      await fs.access(path.join(dir, "workflows", ".gitkeep"));
     });
   });
 
