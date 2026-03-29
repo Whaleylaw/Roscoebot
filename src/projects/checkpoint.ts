@@ -1,4 +1,5 @@
 import { rename, readFile, writeFile } from "node:fs/promises";
+import type { VerificationRecord } from "./verification.js";
 
 /**
  * Checkpoint data persisted alongside each task markdown file.
@@ -16,6 +17,7 @@ export interface CheckpointData {
   failed_approaches: Array<{ approach: string; reason: string }>;
   log: Array<{ timestamp: string; agent: string; action: string }>;
   notes: string;
+  verification?: VerificationRecord;
 }
 
 /**

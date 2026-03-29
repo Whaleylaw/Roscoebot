@@ -73,6 +73,7 @@ export function generateQueueIndex(parsed: ParsedQueue): QueueIndex {
   return {
     available: parsed.available,
     claimed: parsed.claimed,
+    review: parsed.review,
     blocked: parsed.blocked,
     done: parsed.done,
     indexedAt: new Date().toISOString(),

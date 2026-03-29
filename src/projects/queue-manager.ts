@@ -30,11 +30,12 @@ export class QueueValidationError extends Error {
   }
 }
 
-export type QueueSection = "available" | "claimed" | "done" | "blocked";
+export type QueueSection = "available" | "claimed" | "review" | "done" | "blocked";
 
 const SECTION_HEADINGS: Record<QueueSection, string> = {
   available: "Available",
   claimed: "Claimed",
+  review: "Review",
   done: "Done",
   blocked: "Blocked",
 };
@@ -50,7 +51,7 @@ export function serializeQueue(parsed: ParsedQueue): string {
   }
 
   // Sections in canonical order
-  const sections: QueueSection[] = ["available", "claimed", "done", "blocked"];
+  const sections: QueueSection[] = ["available", "claimed", "review", "done", "blocked"];
   for (const section of sections) {
     out += `\n## ${SECTION_HEADINGS[section]}\n`;
     const entries: QueueEntry[] = parsed[section];

@@ -44,6 +44,7 @@ export interface BoardIndex {
 export interface QueueIndex {
   available: QueueEntry[];
   claimed: QueueEntry[];
+  review: QueueEntry[];
   blocked: QueueEntry[];
   done: QueueEntry[];
   indexedAt: string;

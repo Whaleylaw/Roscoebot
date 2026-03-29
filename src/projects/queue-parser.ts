@@ -11,6 +11,7 @@ export interface ParsedQueue {
   frontmatter: QueueFrontmatter | null;
   available: QueueEntry[];
   claimed: QueueEntry[];
+  review: QueueEntry[];
   done: QueueEntry[];
   blocked: QueueEntry[];
 }
@@ -200,6 +201,7 @@ export function parseQueue(content: string, filePath: string): ParsedQueue {
     frontmatter,
     available: parseSectionEntries(sections["available"] ?? ""),
     claimed: parseSectionEntries(sections["claimed"] ?? ""),
+    review: parseSectionEntries(sections["review"] ?? ""),
     done: parseSectionEntries(sections["done"] ?? ""),
     blocked: parseSectionEntries(sections["blocked"] ?? ""),
   };

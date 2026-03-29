@@ -127,7 +127,8 @@ function execCommand(
           return;
         }
         // Non-zero exit code -- resolve with exit code from error
-        resolve({ stdout: stdout ?? "", exitCode: error.code ?? 1 });
+        const code = typeof error.code === "number" ? error.code : 1;
+        resolve({ stdout: stdout ?? "", exitCode: code });
         return;
       }
       resolve({ stdout: stdout ?? "", exitCode: 0 });

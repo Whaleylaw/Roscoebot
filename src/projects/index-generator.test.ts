@@ -64,6 +64,7 @@ describe("index-generator", () => {
         approval_required: false,
         estimated_size: "medium",
         execution_mode: "auto",
+        success_criteria: [],
       };
       const result = generateTaskIndex(fm);
       expect(result.id).toBe("TASK-001");
@@ -95,6 +96,7 @@ describe("index-generator", () => {
           approval_required: false,
           estimated_size: "medium",
           execution_mode: "auto",
+          success_criteria: [],
         },
         {
           id: "TASK-002",
@@ -113,6 +115,7 @@ describe("index-generator", () => {
           approval_required: false,
           estimated_size: "medium",
           execution_mode: "auto",
+          success_criteria: [],
         },
       ];
       const result = generateBoardIndex(tasks, ["Backlog", "In Progress", "Done"]);
@@ -154,6 +157,7 @@ describe("index-generator", () => {
           approval_required: false,
           estimated_size: "medium",
           execution_mode: "auto",
+          success_criteria: [],
         },
       ];
       const result = generateBoardIndex(tasks, ["Backlog", "Done"]);
@@ -169,6 +173,7 @@ describe("index-generator", () => {
         frontmatter: { updated: "2026-01-01" },
         available: [{ taskId: "TASK-001", metadata: {} }],
         claimed: [{ taskId: "TASK-002", metadata: { agent: "bot" } }],
+        review: [],
         blocked: [],
         done: [{ taskId: "TASK-003", metadata: {} }],
       };

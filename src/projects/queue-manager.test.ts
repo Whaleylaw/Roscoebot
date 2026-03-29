@@ -80,6 +80,7 @@ describe("serializeQueue", () => {
       frontmatter: { updated: "2026-03-27" },
       available: [{ taskId: "TASK-001", metadata: { priority: "high", agent: "bot-a" } }],
       claimed: [],
+      review: [],
       done: [],
       blocked: [],
     };
@@ -93,6 +94,7 @@ describe("serializeQueue", () => {
       frontmatter: null,
       available: [{ taskId: "TASK-005", metadata: {} }],
       claimed: [],
+      review: [],
       done: [],
       blocked: [],
     };
@@ -386,7 +388,7 @@ describe("concurrent access", () => {
   /** Write a queue.md with specific tasks in the Available section. */
   async function writeQueueWithTasks(dir: string, taskIds: string[]): Promise<void> {
     const entries = taskIds.map((id) => `- ${id}`).join("\n");
-    const content = `---\nupdated: "2026-01-01"\n---\n\n## Available\n\n${entries}\n\n## Claimed\n\n## Done\n\n## Blocked\n`;
+    const content = `---\nupdated: "2026-01-01"\n---\n\n## Available\n\n${entries}\n\n## Claimed\n\n## Review\n\n## Done\n\n## Blocked\n`;
     await fs.writeFile(path.join(dir, "queue.md"), content, "utf8");
   }
 

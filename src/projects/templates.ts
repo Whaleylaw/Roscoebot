@@ -39,7 +39,7 @@ export function generateQueueMd(): string {
   const data = QueueFrontmatterSchema.parse({ updated: today });
 
   const yaml = YAML.stringify(data, { schema: "core" });
-  return `---\n${yaml}---\n\n## Available\n\n## Claimed\n\n## Done\n\n## Blocked\n`;
+  return `---\n${yaml}---\n\n## Available\n\n## Claimed\n\n## Review\n\n## Done\n\n## Blocked\n`;
 }
 
 /**
