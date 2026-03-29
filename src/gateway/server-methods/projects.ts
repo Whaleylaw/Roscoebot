@@ -92,6 +92,88 @@ export const projectsHandlers: GatewayRequestHandlers = {
     respond(true, { queue });
   },
 
+  "projects.review.approve": async ({ params, respond }) => {
+    if (!projectsService) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "projects service not started"));
+      return;
+    }
+    const name = validateProjectParam(params, respond);
+    if (!name) return;
+    const taskId =
+      typeof params.taskId === "string" && params.taskId.trim() ? params.taskId.trim() : null;
+    if (!taskId) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing required param: taskId"),
+      );
+      return;
+    }
+    try {
+      const { projectsReviewApproveCommand } = await import("../../commands/projects.review.js");
+      const projectDir = await projectsService.resolveProjectDir(name);
+      if (!projectDir) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, `project not found: ${name}`),
+        );
+        return;
+      }
+      await projectsReviewApproveCommand({
+        taskId,
+        projectDir,
+        notes: typeof params.notes === "string" ? params.notes : undefined,
+        reviewer: typeof params.reviewer === "string" ? params.reviewer : undefined,
+      });
+      respond(true, { ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, message));
+    }
+  },
+
+  "projects.review.reject": async ({ params, respond }) => {
+    if (!projectsService) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "projects service not started"));
+      return;
+    }
+    const name = validateProjectParam(params, respond);
+    if (!name) return;
+    const taskId =
+      typeof params.taskId === "string" && params.taskId.trim() ? params.taskId.trim() : null;
+    if (!taskId) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing required param: taskId"),
+      );
+      return;
+    }
+    try {
+      const { projectsReviewRejectCommand } = await import("../../commands/projects.review.js");
+      const projectDir = await projectsService.resolveProjectDir(name);
+      if (!projectDir) {
+        respond(
+          false,
+          undefined,
+          errorShape(ErrorCodes.INVALID_REQUEST, `project not found: ${name}`),
+        );
+        return;
+      }
+      await projectsReviewRejectCommand({
+        taskId,
+        projectDir,
+        notes: typeof params.notes === "string" ? params.notes : undefined,
+        reviewer: typeof params.reviewer === "string" ? params.reviewer : undefined,
+      });
+      respond(true, { ok: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, message));
+    }
+  },
+
   "projects.task.checkpoint.get": async ({ params, respond }) => {
     if (!projectsService) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "projects service not started"));
@@ -99,9 +181,14 @@ export const projectsHandlers: GatewayRequestHandlers = {
     }
     const name = validateProjectParam(params, respond);
     if (!name) return;
-    const taskId = typeof params.taskId === "string" && params.taskId.trim() ? params.taskId.trim() : null;
+    const taskId =
+      typeof params.taskId === "string" && params.taskId.trim() ? params.taskId.trim() : null;
     if (!taskId) {
-      respond(false, undefined, errorShape(ErrorCodes.INVALID_REQUEST, "missing required param: taskId"));
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing required param: taskId"),
+      );
       return;
     }
     const checkpoint = await projectsService.getTaskCheckpoint(name, taskId);

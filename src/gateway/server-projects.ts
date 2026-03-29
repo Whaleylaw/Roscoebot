@@ -105,6 +105,20 @@ export class ProjectGatewayService {
     );
   }
 
+  /**
+   * Resolve the directory path for a project by name.
+   * Returns null if the directory does not exist.
+   */
+  async resolveProjectDir(name: string): Promise<string | null> {
+    const dir = path.join(this.projectsRoot, name);
+    try {
+      await fs.access(dir);
+      return dir;
+    } catch {
+      return null;
+    }
+  }
+
   /** Read a task's checkpoint sidecar file. Returns null if not found. */
   async getTaskCheckpoint(projectName: string, taskId: string): Promise<CheckpointData | null> {
     const taskFile = path.join(this.projectsRoot, projectName, "tasks", `${taskId}.md`);
