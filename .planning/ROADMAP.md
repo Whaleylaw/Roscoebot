@@ -59,8 +59,8 @@ Plans:
 
 Plans:
 
-- [ ] 02-01-PLAN.md -- Agent schema extension, generateTaskMd, orchestrator workspace templates
-- [ ] 02-02-PLAN.md -- QueueManager.addTasks batch method, validateTaskGraph, DecomposedTask type
+- [x] 02-01-PLAN.md -- Agent schema extension, generateTaskMd, orchestrator workspace templates
+- [x] 02-02-PLAN.md -- QueueManager.addTasks batch method, validateTaskGraph, DecomposedTask type
 - [ ] 02-03-PLAN.md -- Atomic batch task creation pipeline (createTaskBatch)
 - [ ] 02-04-PLAN.md -- Workflow status hook, orchestrateGoal pipeline function
 

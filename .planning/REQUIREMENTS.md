@@ -16,15 +16,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Decomposition
 
-- [ ] **DEC-01**: Orchestrator can decompose a user goal into a set of executable tasks with dependencies, capabilities, and success criteria
+- [x] **DEC-01**: Orchestrator can decompose a user goal into a set of executable tasks with dependencies, capabilities, and success criteria
 - [ ] **DEC-02**: Decomposed tasks are low-ambiguity: each includes objective, context, action guidance, success criteria, and verification method
-- [ ] **DEC-03**: Decomposition is shallow by default (2 levels max) with adaptive decompose-on-failure for deeper breakdown
+- [x] **DEC-03**: Decomposition is shallow by default (2 levels max) with adaptive decompose-on-failure for deeper breakdown
 - [x] **DEC-04**: Task frontmatter is extended with: workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode
 
 ### Task Creation and Queue Integration
 
-- [ ] **QUE-01**: Orchestrator creates tasks via the existing task system and places them in the project queue
-- [ ] **QUE-02**: Tasks are created with correct dependencies, capabilities, and priority so the existing heartbeat scanner can claim them
+- [x] **QUE-01**: Orchestrator creates tasks via the existing task system and places them in the project queue
+- [x] **QUE-02**: Tasks are created with correct dependencies, capabilities, and priority so the existing heartbeat scanner can claim them
 - [ ] **QUE-03**: Agents pick up tasks from the queue on their heartbeats via existing capability matching, dependency satisfaction, and priority sorting — no orchestrator-to-agent assignment needed
 - [ ] **QUE-04**: Task/queue state is updated natively through the existing project system as agents claim and complete work
 
@@ -84,8 +84,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Capability Model
 
 - [x] **CAP-01**: Tasks have capability tags (code, research, ops, review, deploy, etc.) that are domain-agnostic
-- [ ] **CAP-02**: Orchestrator dispatches tasks to workers with matching capabilities
-- [ ] **CAP-03**: Capability matching is extensible — new capability types can be added without code changes
+- [x] **CAP-02**: Orchestrator dispatches tasks to workers with matching capabilities
+- [x] **CAP-03**: Capability matching is extensible — new capability types can be added without code changes
 
 ### Orchestration Agent
 
@@ -141,12 +141,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WF-02       | Phase 1 | Complete |
 | WF-03       | Phase 1 | Complete |
 | WF-04       | Phase 1 | Complete |
-| DEC-01      | Phase 2 | Pending  |
+| DEC-01      | Phase 2 | Complete |
 | DEC-02      | Phase 2 | Pending  |
-| DEC-03      | Phase 2 | Pending  |
+| DEC-03      | Phase 2 | Complete |
 | DEC-04      | Phase 1 | Complete |
-| QUE-01      | Phase 2 | Pending  |
-| QUE-02      | Phase 2 | Pending  |
+| QUE-01      | Phase 2 | Complete |
+| QUE-02      | Phase 2 | Complete |
 | QUE-03      | Phase 2 | Pending  |
 | QUE-04      | Phase 2 | Pending  |
 | PRG-01      | Phase 6 | Pending  |
@@ -179,8 +179,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | SYN-02      | Phase 5 | Pending  |
 | SYN-03      | Phase 5 | Pending  |
 | CAP-01      | Phase 1 | Complete |
-| CAP-02      | Phase 2 | Pending  |
-| CAP-03      | Phase 2 | Pending  |
+| CAP-02      | Phase 2 | Complete |
+| CAP-03      | Phase 2 | Complete |
 | ORC-01      | Phase 2 | Pending  |
 | ORC-02      | Phase 2 | Pending  |
 | ORC-03      | Phase 2 | Pending  |
