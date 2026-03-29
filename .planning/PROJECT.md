@@ -15,21 +15,21 @@ A user describes a goal in natural language and the system produces structured, 
 - [x] First-class workflow files (workflows/WF-NNN.md) within projects, linked to tasks — Validated in Phase 01: Schema & Workflow Foundation
 - [x] Task frontmatter extensions: workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode — Validated in Phase 01: Schema & Workflow Foundation
 - [x] Workflow templates: reusable markdown workflow starter patterns — Validated in Phase 01: Schema & Workflow Foundation
+- [x] Task decomposition: break workflows into low-ambiguity, execution-ready tasks with deps and capabilities — Validated in Phase 02: Orchestrator, Decomposition & Queue Integration
+- [x] Task authoring standard: objective, context, action guidance, success criteria, verification method, expected outputs — Validated in Phase 02: Orchestrator, Decomposition & Queue Integration
+- [x] Queue/board state coherence: orchestration updates project/task/queue state natively — Validated in Phase 02: Orchestrator, Decomposition & Queue Integration
+- [x] Orchestration agent type that the main agent can spawn for project/workflow coordination — Validated in Phase 02: Orchestrator, Decomposition & Queue Integration
 
 ### Active
 
-- [ ] Orchestration agent type that the main agent can spawn for project/workflow coordination
 - [ ] Project placement logic: determine existing project vs new project vs sub-project
 - [ ] Workflow selection: match requests to known markdown-based workflow templates
 - [ ] Workflow synthesis: generate tailored workflows from freeform user goals when no template fits
-- [ ] Task decomposition: break workflows into low-ambiguity, execution-ready tasks with deps and capabilities
-- [ ] Task authoring standard: objective, context, action guidance, success criteria, verification method, expected outputs
 - [ ] Orchestration execution: coordinate task dispatch across workers/subagents, respect dependencies, parallel when safe
 - [ ] Verification framework: structured verification types (automatic, human, external, mixed) with evidence recording
 - [ ] Recovery policy: retry, decompose further, reroute, block, or escalate with anti-loop budget
 - [ ] Checkpoint integration: leverage existing checkpoint system for interruption/resume across sessions
 - [ ] Domain-agnostic design: support coding, research, planning, operations, and mixed workflows
-- [ ] Queue/board state coherence: orchestration updates project/task/queue state natively
 
 ### Out of Scope
 
@@ -101,4 +101,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-03-29 after Phase 01 completion_
+_Last updated: 2026-03-29 after Phase 02 completion_
