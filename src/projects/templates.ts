@@ -87,6 +87,13 @@ export function generateTaskMd(
     approval_required?: boolean;
     estimated_size?: "small" | "medium" | "large";
     parent?: string;
+    success_criteria?: Array<{
+      type: string;
+      path?: string;
+      cmd?: string;
+      expect?: number;
+      output_pattern?: string;
+    }>;
   },
   body: TaskMdBody,
 ): string {
@@ -105,6 +112,7 @@ export function generateTaskMd(
     approval_required: opts.approval_required ?? false,
     estimated_size: opts.estimated_size ?? "medium",
     parent: opts.parent ?? null,
+    success_criteria: opts.success_criteria ?? [],
     created: today,
     updated: today,
   });

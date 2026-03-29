@@ -41,6 +41,16 @@ export const ProjectFrontmatterSchema = z.object({
   allowed_capabilities: z.array(z.string()).default([]),
 });
 
+export const SuccessCriterionSchema = z.discriminatedUnion("type", [
+  z.object({ type: z.literal("file_exists"), path: z.string() }),
+  z.object({
+    type: z.literal("command"),
+    cmd: z.string(),
+    expect: z.number().default(0),
+    output_pattern: z.string().optional(),
+  }),
+]);
+
 export const TaskFrontmatterSchema = z.object({
   id: z.string().regex(TASK_ID_PATTERN),
   title: z.string(),
@@ -60,6 +70,7 @@ export const TaskFrontmatterSchema = z.object({
   approval_required: z.boolean().default(false),
   estimated_size: z.enum(["small", "medium", "large"]).default("medium"),
   execution_mode: z.enum(["auto", "manual", "interactive"]).default("auto"),
+  success_criteria: z.array(SuccessCriterionSchema).default([]),
 });
 
 export const WorkflowFrontmatterSchema = z.object({

@@ -2,10 +2,12 @@ import type { z } from "zod";
 import type {
   ProjectFrontmatterSchema,
   QueueFrontmatterSchema,
+  SuccessCriterionSchema,
   TaskFrontmatterSchema,
   WorkflowFrontmatterSchema,
 } from "./schemas.js";
 
+export type SuccessCriterion = z.infer<typeof SuccessCriterionSchema>;
 export type ProjectFrontmatter = z.infer<typeof ProjectFrontmatterSchema>;
 export type TaskFrontmatter = z.infer<typeof TaskFrontmatterSchema>;
 export type QueueFrontmatter = z.infer<typeof QueueFrontmatterSchema>;

@@ -4,11 +4,13 @@ export {
   TaskFrontmatterSchema,
   QueueFrontmatterSchema,
   WorkflowFrontmatterSchema,
+  SuccessCriterionSchema,
   WORKFLOW_ID_PATTERN,
 } from "./schemas.js";
 
 // Types
 export type {
+  SuccessCriterion,
   ProjectFrontmatter,
   TaskFrontmatter,
   QueueFrontmatter,
@@ -98,6 +100,15 @@ export type {
 // Checkpoint (interruption/resume support)
 export { createCheckpoint, readCheckpoint, writeCheckpoint, checkpointPath } from "./checkpoint.js";
 export type { CheckpointData } from "./checkpoint.js";
+
+// Verification (check runners + types)
+export { runFileExistsCheck, runCommandCheck } from "./verification.js";
+export type {
+  CheckResult,
+  VerificationEvidence,
+  VerificationResult,
+  VerificationRecord,
+} from "./verification.js";
 
 // Heartbeat scanner (agent task pickup)
 export { scanAndClaimTask } from "./heartbeat-scanner.js";
