@@ -387,8 +387,9 @@
   color: var(--muted);
   border-bottom: 2px solid transparent;
   cursor: pointer;
-  transition: color var(--duration-fast) var(--ease-out),
-              border-color var(--duration-fast) var(--ease-out);
+  transition:
+    color var(--duration-fast) var(--ease-out),
+    border-color var(--duration-fast) var(--ease-out);
   background: none;
   border-top: none;
   border-left: none;
@@ -737,4 +738,166 @@
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
+}
+
+/* -- Phase 3: Review Column & Verification -- */
+
+/* Review column header accent */
+.projects-board-column--review .projects-board-column__header {
+  border-bottom: 2px solid var(--warn);
+}
+
+.projects-board-column--review .projects-board-column__count {
+  background: var(--warn-subtle);
+  color: var(--warn);
+}
+
+/* Review card badge (same structure as .projects-board-card__blocked) */
+.projects-board-card__review-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--warn);
+  background: var(--warn-subtle);
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+}
+
+/* Verification evidence section in peek panel */
+.projects-peek__verification {
+  margin-top: 16px;
+}
+
+.projects-peek__verification-status {
+  padding: 8px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects-peek__verification-status--pass {
+  background: var(--ok-subtle);
+  color: var(--ok);
+}
+
+.projects-peek__verification-status--fail {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.projects-peek__verification-status--pending {
+  background: var(--warn-subtle);
+  color: var(--warn);
+}
+
+.projects-peek__verification-checks {
+  margin-top: 8px;
+}
+
+.projects-peek__check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.projects-peek__check-icon--pass {
+  color: var(--ok);
+}
+
+.projects-peek__check-icon--fail {
+  color: var(--danger);
+}
+
+.projects-peek__check-detail {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Review action buttons */
+.projects-peek__review-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.projects-review-btn--approve {
+  background: var(--accent);
+  color: var(--accent-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+}
+
+.projects-review-btn--approve:hover {
+  background: var(--accent-hover);
+}
+
+.projects-review-btn--reject {
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.projects-review-btn--reject:hover {
+  background: var(--danger-subtle);
+}
+
+/* Reject inline confirmation */
+.projects-peek__reject-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.projects-peek__reject-confirm-text {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.projects-peek__reject-confirm-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.projects-review-btn--confirm-reject {
+  background: var(--danger);
+  color: var(--accent-foreground);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
+}
+
+.projects-review-btn--keep {
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  border: none;
+  cursor: pointer;
 }
