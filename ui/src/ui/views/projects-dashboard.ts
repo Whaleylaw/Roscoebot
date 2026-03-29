@@ -1,12 +1,17 @@
 import { html, nothing } from "lit";
-import type { ProjectListEntry, BoardIndex, QueueIndex, CheckpointInfo } from "../controllers/projects.ts";
+import type {
+  ProjectListEntry,
+  BoardIndex,
+  QueueIndex,
+  CheckpointInfo,
+} from "../controllers/projects.ts";
+import type { KanbanBoardProps } from "./projects-board.ts";
 import {
   renderProjectStatusWidget,
   renderTaskCountsWidget,
   renderActiveAgentsWidget,
   renderRecentActivityWidget,
 } from "./projects-widgets.ts";
-import type { KanbanBoardProps } from "./projects-board.ts";
 
 export type ProjectDashboardProps = {
   loading: boolean;
@@ -26,16 +31,13 @@ export type ProjectDashboardProps = {
   checkpointLoading: boolean;
   onSwitchSubView: (view: "overview" | "board") => void;
   onTogglePeek: (taskId: string) => void;
+  onReviewApprove?: (taskId: string) => void;
+  onReviewReject?: (taskId: string) => void;
   renderBoard: ((props: KanbanBoardProps) => unknown) | null;
 };
 
 /** Default widget IDs when project config is absent. */
-const DEFAULT_WIDGETS = [
-  "project-status",
-  "task-counts",
-  "active-agents",
-  "recent-activity",
-];
+const DEFAULT_WIDGETS = ["project-status", "task-counts", "active-agents", "recent-activity"];
 
 /** Render the project dashboard with breadcrumb, configurable widgets, and sub-projects. */
 export function renderProjectDashboard(props: ProjectDashboardProps) {
@@ -45,24 +47,26 @@ export function renderProjectDashboard(props: ProjectDashboardProps) {
     <div class="projects-dashboard">
       ${renderBreadcrumb(props)}
       ${renderViewTabs(props)}
-      ${props.error
-        ? html`
-            <div class="projects-error">
-              Failed to load project data. Try refreshing the page.
-            </div>
-          `
-        : props.loading && !props.project
-          ? renderLoadingSkeleton()
-          : props.project
-            ? html`
-                ${props.subView === "board"
-                  ? renderBoardView(props)
-                  : html`
+      ${
+        props.error
+          ? html`
+              <div class="projects-error">Failed to load project data. Try refreshing the page.</div>
+            `
+          : props.loading && !props.project
+            ? renderLoadingSkeleton()
+            : props.project
+              ? html`
+                ${
+                  props.subView === "board"
+                    ? renderBoardView(props)
+                    : html`
                     ${renderWidgetGrid(props)}
                     ${renderSubProjects(props)}
-                  `}
+                  `
+                }
               `
-            : nothing}
+              : nothing
+      }
     </div>
   `;
 }
@@ -73,8 +77,9 @@ function renderBreadcrumb(props: ProjectDashboardProps) {
     <nav class="projects-breadcrumb">
       <a class="projects-breadcrumb__link" @click=${props.onNavigateList}>Projects</a>
       <span class="projects-breadcrumb__sep">\u203A</span>
-      ${props.subProjectName
-        ? html`
+      ${
+        props.subProjectName
+          ? html`
             <a
               class="projects-breadcrumb__link"
               @click=${() => props.onNavigateProject(props.projectName)}
@@ -82,9 +87,10 @@ function renderBreadcrumb(props: ProjectDashboardProps) {
             <span class="projects-breadcrumb__sep">\u203A</span>
             <span class="projects-breadcrumb__current">${props.subProjectName}</span>
           `
-        : html`
+          : html`
             <span class="projects-breadcrumb__current">${props.projectName}</span>
-          `}
+          `
+      }
     </nav>
   `;
 }
@@ -104,10 +110,9 @@ function renderLoadingSkeleton() {
 /** Render the widget grid based on project dashboard.widgets configuration. */
 function renderWidgetGrid(props: ProjectDashboardProps) {
   const project = props.project!;
-  const widgetIds: string[] =
-    project.dashboard?.widgets?.length
-      ? project.dashboard.widgets
-      : DEFAULT_WIDGETS;
+  const widgetIds: string[] = project.dashboard?.widgets?.length
+    ? project.dashboard.widgets
+    : DEFAULT_WIDGETS;
 
   const widgetMap: Record<string, () => unknown> = {
     "project-status": () => renderProjectStatusWidget(project, props.board),
@@ -183,16 +188,26 @@ function renderViewTabs(props: ProjectDashboardProps) {
 /** Render the kanban board view via the passed-in renderer (createLazy pattern). */
 function renderBoardView(props: ProjectDashboardProps) {
   const board = props.board;
-  if (!board) return html`<div class="projects-board-column__empty">No tasks in this project</div>`;
+  if (!board)
+    return html`
+      <div class="projects-board-column__empty">No tasks in this project</div>
+    `;
   if (!props.renderBoard) {
     return html`
       <div class="projects-board-skeleton">
-        ${[1, 2, 3, 4].map(() => html`
+        ${[1, 2, 3, 4].map(
+          () => html`
           <div class="projects-board-skeleton__column">
             <div class="skeleton-line" style="width: 60%"></div>
-            ${[1, 2, 3].map(() => html`<div class="skeleton-block" style="height: 80px"></div>`)}
+            ${[1, 2, 3].map(
+              () =>
+                html`
+                  <div class="skeleton-block" style="height: 80px"></div>
+                `,
+            )}
           </div>
-        `)}
+        `,
+        )}
       </div>
     `;
   }
@@ -207,5 +222,7 @@ function renderBoardView(props: ProjectDashboardProps) {
     checkpointLoading: props.checkpointLoading,
     allTasks,
     onTogglePeek: props.onTogglePeek,
+    onReviewApprove: props.onReviewApprove,
+    onReviewReject: props.onReviewReject,
   });
 }

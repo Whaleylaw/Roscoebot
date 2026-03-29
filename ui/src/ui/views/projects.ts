@@ -1,8 +1,8 @@
 import { html, nothing } from "lit";
-import { renderProjectsList, type ProjectsListProps } from "./projects-list.ts";
-import { renderProjectDashboard, type ProjectDashboardProps } from "./projects-dashboard.ts";
 import type { ProjectListEntry, BoardIndex, QueueIndex } from "../controllers/projects.ts";
 import type { KanbanBoardProps } from "./projects-board.ts";
+import { renderProjectDashboard, type ProjectDashboardProps } from "./projects-dashboard.ts";
+import { renderProjectsList, type ProjectsListProps } from "./projects-list.ts";
 
 export type ProjectsProps = {
   // View routing
@@ -37,6 +37,8 @@ export type ProjectsProps = {
   onRefresh: () => void;
   onSwitchSubView: (view: "overview" | "board") => void;
   onTogglePeek: (taskId: string) => void;
+  onReviewApprove?: (taskId: string) => void;
+  onReviewReject?: (taskId: string) => void;
 };
 
 /** Route between project list and dashboard based on view state. */
@@ -60,6 +62,8 @@ export function renderProjects(props: ProjectsProps) {
       checkpointLoading: props.checkpointLoading,
       onSwitchSubView: props.onSwitchSubView,
       onTogglePeek: props.onTogglePeek,
+      onReviewApprove: props.onReviewApprove,
+      onReviewReject: props.onReviewReject,
       renderBoard: props.renderBoard,
     });
   }

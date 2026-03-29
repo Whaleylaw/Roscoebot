@@ -41,9 +41,32 @@ export type QueueEntry = {
 export type QueueIndex = {
   available: QueueEntry[];
   claimed: QueueEntry[];
+  review: QueueEntry[];
   blocked: QueueEntry[];
   done: QueueEntry[];
   indexedAt: string;
+};
+
+/** Verification check result returned in checkpoint data. */
+export type VerificationCheckResult = {
+  type: string;
+  target: string;
+  passed: boolean;
+  detail: string;
+};
+
+/** Verification info attached to checkpoint data. */
+export type VerificationInfo = {
+  last_run: string;
+  passed: boolean;
+  verification_type: string;
+  checks: VerificationCheckResult[];
+  human_review?: {
+    status: string;
+    reviewer?: string;
+    reviewed_at?: string;
+    notes?: string;
+  };
 };
 
 /** Checkpoint data shape returned by the gateway peek RPC. */
@@ -56,6 +79,7 @@ export type CheckpointInfo = {
   progress_pct: number;
   files_modified: string[];
   log: Array<{ timestamp: string; agent: string; action: string }>;
+  verification?: VerificationInfo;
 };
 
 /** State slice needed by loadTaskCheckpoint. */
@@ -89,10 +113,7 @@ export async function loadProjects(state: ProjectsState): Promise<void> {
   state.projectsError = null;
 
   try {
-    const res = await state.client.request<{ projects: ProjectListEntry[] }>(
-      "projects.list",
-      {},
-    );
+    const res = await state.client.request<{ projects: ProjectListEntry[] }>("projects.list", {});
     state.projectsList = res.projects ?? [];
 
     // Fetch boards and queues in parallel for task counts and agent counts
@@ -101,10 +122,9 @@ export async function loadProjects(state: ProjectsState): Promise<void> {
       Promise.all(
         names.map(async (name) => {
           try {
-            const b = await state.client!.request<{ board: BoardIndex }>(
-              "projects.board.get",
-              { project: name },
-            );
+            const b = await state.client!.request<{ board: BoardIndex }>("projects.board.get", {
+              project: name,
+            });
             return [name, b.board] as const;
           } catch {
             return null;
@@ -114,10 +134,9 @@ export async function loadProjects(state: ProjectsState): Promise<void> {
       Promise.all(
         names.map(async (name) => {
           try {
-            const q = await state.client!.request<{ queue: QueueIndex }>(
-              "projects.queue.get",
-              { project: name },
-            );
+            const q = await state.client!.request<{ queue: QueueIndex }>("projects.queue.get", {
+              project: name,
+            });
             return [name, q.queue] as const;
           } catch {
             return null;
@@ -192,4 +211,39 @@ export async function loadTaskCheckpoint(
   } finally {
     state.projectsCheckpointLoading = false;
   }
+}
+
+/** State slice needed by review actions. */
+export type ReviewActionState = {
+  client: GatewayBrowserClient | null;
+};
+
+/** Approve a task in review -- moves it to Done via gateway RPC. */
+export async function reviewApprove(
+  state: ReviewActionState,
+  taskId: string,
+  projectDir: string,
+  notes?: string,
+): Promise<void> {
+  if (!state.client) return;
+  await state.client.request("projects.review.approve", {
+    taskId,
+    projectDir,
+    ...(notes ? { notes } : {}),
+  });
+}
+
+/** Reject a task in review -- moves it back to Available via gateway RPC. */
+export async function reviewReject(
+  state: ReviewActionState,
+  taskId: string,
+  projectDir: string,
+  notes?: string,
+): Promise<void> {
+  if (!state.client) return;
+  await state.client.request("projects.review.reject", {
+    taskId,
+    projectDir,
+    ...(notes ? { notes } : {}),
+  });
 }

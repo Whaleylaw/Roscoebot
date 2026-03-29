@@ -2050,12 +2050,26 @@ export function renderApp(state: AppViewState) {
                   view: state.projectsView,
                   projectName: state.projectsName,
                   subProjectName: state.projectsSubProject,
-                  projectsList: state.projectsList as import("./controllers/projects.ts").ProjectListEntry[] | null,
-                  projectsBoards: state.projectsBoards as Record<string, import("./controllers/projects.ts").BoardIndex>,
-                  projectsQueues: state.projectsQueues as Record<string, import("./controllers/projects.ts").QueueIndex>,
-                  projectData: state.projectData as import("./controllers/projects.ts").ProjectListEntry | null,
-                  projectBoard: state.projectBoard as import("./controllers/projects.ts").BoardIndex | null,
-                  projectQueue: state.projectQueue as import("./controllers/projects.ts").QueueIndex | null,
+                  projectsList: state.projectsList as
+                    | import("./controllers/projects.ts").ProjectListEntry[]
+                    | null,
+                  projectsBoards: state.projectsBoards as Record<
+                    string,
+                    import("./controllers/projects.ts").BoardIndex
+                  >,
+                  projectsQueues: state.projectsQueues as Record<
+                    string,
+                    import("./controllers/projects.ts").QueueIndex
+                  >,
+                  projectData: state.projectData as
+                    | import("./controllers/projects.ts").ProjectListEntry
+                    | null,
+                  projectBoard: state.projectBoard as
+                    | import("./controllers/projects.ts").BoardIndex
+                    | null,
+                  projectQueue: state.projectQueue as
+                    | import("./controllers/projects.ts").QueueIndex
+                    | null,
                   projectsLoading: state.projectsLoading,
                   projectsError: state.projectsError,
                   projectDashboardLoading: state.projectDashboardLoading,
@@ -2091,6 +2105,24 @@ export function renderApp(state: AppViewState) {
                       );
                     }
                   },
+                  onReviewApprove: (taskId: string) => {
+                    void import("./controllers/projects.ts").then((mod) =>
+                      mod.reviewApprove(
+                        state as unknown as Parameters<typeof mod.reviewApprove>[0],
+                        taskId,
+                        state.projectsName!,
+                      ),
+                    );
+                  },
+                  onReviewReject: (taskId: string) => {
+                    void import("./controllers/projects.ts").then((mod) =>
+                      mod.reviewReject(
+                        state as unknown as Parameters<typeof mod.reviewReject>[0],
+                        taskId,
+                        state.projectsName!,
+                      ),
+                    );
+                  },
                   onSelectProject: (name: string) => {
                     state.projectsView = "dashboard";
                     const url = new URL(window.location.href);
@@ -2124,9 +2156,7 @@ export function renderApp(state: AppViewState) {
                   },
                   onRefresh: () => {
                     void import("./controllers/projects.ts").then((mod) =>
-                      mod.loadProjects(
-                        state as unknown as Parameters<typeof mod.loadProjects>[0],
-                      ),
+                      mod.loadProjects(state as unknown as Parameters<typeof mod.loadProjects>[0]),
                     );
                   },
                 }),
