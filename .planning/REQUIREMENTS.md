@@ -36,10 +36,10 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Verification
 
-- [ ] **VER-01**: Each task has a verification_type: automatic, human, external, or mixed
+- [x] **VER-01**: Each task has a verification_type: automatic, human, external, or mixed
 - [ ] **VER-02**: Automatic verification checks defined success criteria (test passes, file exists, command output matches)
 - [ ] **VER-03**: Human verification creates a checkpoint that pauses execution until user confirms
-- [ ] **VER-04**: Verification evidence is recorded alongside task checkpoint (command output, file diffs, API responses, user confirmation)
+- [x] **VER-04**: Verification evidence is recorded alongside task checkpoint (command output, file diffs, API responses, user confirmation)
 - [ ] **VER-05**: A task is not marked "done" until verification passes; failed verification triggers recovery
 
 ### Recovery
@@ -58,7 +58,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Human-in-the-Loop
 
-- [ ] **HIL-01**: Tasks are classified by side_effect_class: none, reversible, irreversible
+- [x] **HIL-01**: Tasks are classified by side_effect_class: none, reversible, irreversible
 - [ ] **HIL-02**: Tasks with side_effect_class "none" or "reversible" auto-proceed without human approval
 - [ ] **HIL-03**: Tasks with side_effect_class "irreversible" or approval_required=true pause for human confirmation
 - [ ] **HIL-04**: Human checkpoints present the task, its planned action, and potential consequences for informed approval
@@ -90,7 +90,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Orchestration Agent
 
 - [x] **ORC-01**: Orchestration agent configured as a persistent agent in agents.list[] with its own workspace, IDENTITY.md, SOUL.md, and AGENTS.md
-- [ ] **ORC-02**: Main agent delegates work to orchestrator via sessions_send; orchestrator processes goals and coordinates work asynchronously
+- [x] **ORC-02**: Main agent delegates work to orchestrator via sessions_send; orchestrator processes goals and coordinates work asynchronously
 - [x] **ORC-03**: Orchestrator coordinates work by creating tasks in the project queue; agents pick up tasks via existing heartbeat claiming
 - [x] **ORC-04**: Orchestrator's AGENTS.md defines its operating instructions: decomposition standards, dispatch policy, verification rules, recovery behavior
 - [x] **ORC-05**: Planning (decomposition, workflow authoring) separated from dispatch (task assignment, state management) within the orchestrator's instruction set
@@ -152,10 +152,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PRG-01      | Phase 6 | Pending  |
 | PRG-02      | Phase 6 | Pending  |
 | PRG-03      | Phase 6 | Pending  |
-| VER-01      | Phase 3 | Pending  |
+| VER-01      | Phase 3 | Complete |
 | VER-02      | Phase 3 | Pending  |
 | VER-03      | Phase 3 | Pending  |
-| VER-04      | Phase 3 | Pending  |
+| VER-04      | Phase 3 | Complete |
 | VER-05      | Phase 3 | Pending  |
 | REC-01      | Phase 4 | Pending  |
 | REC-02      | Phase 4 | Pending  |
@@ -165,7 +165,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | RSM-01      | Phase 4 | Pending  |
 | RSM-02      | Phase 4 | Pending  |
 | RSM-03      | Phase 4 | Pending  |
-| HIL-01      | Phase 3 | Pending  |
+| HIL-01      | Phase 3 | Complete |
 | HIL-02      | Phase 3 | Pending  |
 | HIL-03      | Phase 3 | Pending  |
 | HIL-04      | Phase 3 | Pending  |
@@ -182,7 +182,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CAP-02      | Phase 2 | Complete |
 | CAP-03      | Phase 2 | Complete |
 | ORC-01      | Phase 2 | Complete |
-| ORC-02      | Phase 2 | Pending  |
+| ORC-02      | Phase 2 | Complete |
 | ORC-03      | Phase 2 | Complete |
 | ORC-04      | Phase 2 | Complete |
 | ORC-05      | Phase 2 | Complete |

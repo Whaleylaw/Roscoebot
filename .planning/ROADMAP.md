@@ -81,7 +81,7 @@ Plans:
 
 Plans:
 
-- [ ] 03-01-PLAN.md -- Schema extensions (success_criteria, review queue section, checkpoint verification, check runners)
+- [x] 03-01-PLAN.md -- Schema extensions (success_criteria, review queue section, checkpoint verification, check runners)
 - [ ] 03-02-PLAN.md -- Verification engine and pre-complete hook gate logic
 - [ ] 03-03-PLAN.md -- CLI review approve/reject commands and gateway RPC methods
 - [ ] 03-04-PLAN.md -- Board UI Review column, verification evidence display, approve/reject buttons
