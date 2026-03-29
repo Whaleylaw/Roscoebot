@@ -1,195 +1,123 @@
 # Feature Landscape
 
-**Domain:** AI-agent-integrated markdown-based project management
-**Researched:** 2026-03-26
-**Confidence:** MEDIUM-HIGH (based on design spec analysis + competitive landscape research)
-
-## Competitive Context
-
-The feature landscape is informed by analysis of these systems:
-
-| System               | Category                 | Key Differentiator                                                |
-| -------------------- | ------------------------ | ----------------------------------------------------------------- |
-| Linear               | SaaS PM tool             | AI triage, agent-as-teammate, coding agent deeplinks              |
-| GitHub Projects      | Code-native PM           | Sub-issues, agentic workflows in Actions, repo-integrated         |
-| Trello               | Visual PM                | Simple kanban, Power-Ups ecosystem, low learning curve            |
-| Taskmaster AI        | AI task orchestrator     | PRD parsing into dependency-aware tasks, MCP tools, autopilot TDD |
-| GSD                  | Spec-driven dev workflow | Fresh subagent contexts, atomic plans, context rot prevention     |
-| Cursor               | AI coding IDE            | Plan mode, parallel agents, cloud agents, automations             |
-| backlog.md           | Markdown PM              | Git-native, markdown files as tasks, React kanban UI              |
-| MDTM (Roo Commander) | Markdown task mgmt       | TOML frontmatter, status-driven files in repo                     |
-| taskmd               | Markdown task mgmt       | YAML frontmatter, AI-agent-first design                           |
-
----
+**Domain:** AI Agent Workflow Orchestration Layer (brownfield, layered on existing project/task/queue/checkpoint system)
+**Researched:** 2026-03-28
 
 ## Table Stakes
 
-Features users expect. Missing any of these and the system feels incomplete or broken for a PM tool built into an AI agent platform.
+Features users expect from any orchestration layer. Missing = the system adds no value over manual task creation.
 
-| Feature                                      | Why Expected                                                                                                                                                        | Complexity | Notes                                                                                                                                  |
-| -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| **Task CRUD** (create, read, update, delete) | Every PM tool has this. Agents and humans must be able to create and modify tasks.                                                                                  | Low        | CLI + agent writes to markdown. Already in design spec.                                                                                |
-| **Task status tracking**                     | Users need to know what state work is in. Universal across all competitors.                                                                                         | Low        | YAML frontmatter `status` field. Already in design spec.                                                                               |
-| **Kanban board view**                        | Visual status at a glance. Linear, Trello, GitHub Projects, backlog.md all have this.                                                                               | Medium     | Read-only Phase 1 is fine, but it must exist. Already in spec.                                                                         |
-| **Task priority levels**                     | Without priority, agents and humans cannot triage. Every competitor has this.                                                                                       | Low        | Already in spec: low/medium/high/critical.                                                                                             |
-| **Project list/overview**                    | Users with multiple projects need a summary view. Every PM tool has this.                                                                                           | Low        | Already in spec.                                                                                                                       |
-| **Sub-tasks / checklists**                   | Breaking work into smaller units is fundamental. GitHub has sub-issues, Taskmaster has subtasks, Trello has checklists.                                             | Low        | Already in spec as checkbox sub-tasks within task files.                                                                               |
-| **Task dependencies**                        | Taskmaster's core value prop. Linear and GitHub Projects support this. Without dependencies, agents work out of order.                                              | Medium     | Not explicitly in Phase 1 spec. Must add at minimum a `depends_on` frontmatter field and "next available task" logic that respects it. |
-| **CLI interface**                            | Developers expect CLI access. Taskmaster, backlog.md, GSD all are CLI-first.                                                                                        | Low        | Already in spec: `openclaw projects create/list/status/reindex`.                                                                       |
-| **Agent task claiming**                      | Core to the product's value proposition. If agents cannot autonomously pick up work, this is just another kanban board.                                             | Medium     | Already in spec via heartbeat + queue.md + capability matching.                                                                        |
-| **Interruption/resume**                      | Context compaction and session ends are inevitable. GSD solves this with fresh contexts; Taskmaster ignores it. OpenClaw's checkpoint approach is the right answer. | Medium     | Already in spec via checkpoint sections and logs.                                                                                      |
-| **Activity log/history**                     | Users need to see what happened. Linear has activity feeds, GitHub has timeline.                                                                                    | Low        | Already in spec as `## Log` section in task files.                                                                                     |
-| **File-on-disk persistence**                 | The markdown-first promise. backlog.md, MDTM, taskmd, GSD all use files. If state lives only in memory or a database, the core value prop is broken.                | Low        | Already the foundational architecture decision.                                                                                        |
-
-### Table Stakes Gap: Task Dependencies
-
-The current Phase 1 spec does not include task dependencies. This is a significant gap. Taskmaster AI's entire value proposition is dependency-aware task sequencing ("what's the next task?"). Without dependencies, agents will work on tasks out of order, and the system cannot answer "what should I do next?" intelligently.
-
-**Recommendation:** Add `depends_on: [TASK-XXX]` to task frontmatter and ensure heartbeat pickup logic skips tasks whose dependencies are not in `done` status. Complexity: Medium. This is table stakes, not a differentiator.
-
----
+| Feature                        | Why Expected                                                                                                                            | Complexity | Notes                                                                                                                                                  |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Goal-to-tasks decomposition    | Core value prop: turn vague intent into executable work. Without this, the orchestration layer is just a wrapper                        | High       | Must produce low-ambiguity, single-action-cycle tasks with clear success criteria. Shallow decomposition (2 levels max) preferred over deep chains     |
+| Workflow file lifecycle        | Orchestration needs a first-class entity linking goals to tasks. Without workflow files, coordination is scattered across task metadata | Medium     | `workflows/WF-NNN.md` within project dirs. Statuses: draft, active, paused, completed, failed                                                          |
+| Dependency-aware task dispatch | Tasks have `depends_on` already; orchestration must respect this. Parallel dispatch when deps allow, serial when required               | Medium     | Existing task frontmatter supports deps. Orchestrator reads dep graph, dispatches in topological order                                                 |
+| Verification framework         | Without verification, orchestration is "fire and forget." Every serious agent system includes validation gates                          | High       | Types: automatic (test passes, file exists), human (approval checkpoint), external (API check), mixed. Evidence must be recorded                       |
+| Recovery on failure            | Tasks fail. Without retry/escalate/decompose-further, the system stops at first failure and requires manual intervention                | High       | Policy per task: retry (with budget), decompose-further, reroute to different capability, block-and-escalate. Anti-loop budget (max 3 retries default) |
+| Session resumability           | Long workflows span sessions. Without checkpoint-based resume, interrupted work restarts from scratch                                   | Medium     | Leverage existing checkpoint system. Persist workflow state, current task pointer, completed evidence. Resume = re-read checkpoint + continue          |
+| Workflow status and progress   | Users need to know what's happening. Without status visibility, orchestration is a black box                                            | Low        | Expose workflow progress through existing board/queue/.index surfaces. No new UI needed                                                                |
+| Project placement logic        | System must decide: new project, existing project, or sub-project. Wrong placement = organizational chaos                               | Medium     | Heuristics: keyword/capability match against active projects, scope similarity, explicit user override                                                 |
 
 ## Differentiators
 
-Features that set OpenClaw apart from competitors. Not expected by default, but create significant competitive advantage.
+Features that set this apart from manual task management or simpler agent systems. Not expected, but high-value.
 
-| Feature                                                         | Value Proposition                                                                                                                                                                                                                   | Complexity | Notes                                                                                |
-| --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ------------------------------------------------------------------------------------ |
-| **Markdown as single source of truth with auto-generated JSON** | No other tool does this exact pattern. backlog.md is close but uses its own CLI to manage state. MDTM stores files but has no JSON index layer. The two-layer approach (agents write markdown, UI reads JSON) is novel and correct. | Medium     | Already in spec. This is the architecture differentiator. Protect it.                |
-| **Capability-based agent routing**                              | No competitor does capability matching for task assignment. Taskmaster assigns to "the agent" (singular). Linear assigns to humans. OpenClaw can match task requirements to agent skills automatically.                             | Medium     | Already in spec. This is a major differentiator vs. Taskmaster's single-agent model. |
-| **Multi-agent concurrent work**                                 | Cursor supports parallel agents but in isolated worktrees, not on a shared project board. OpenClaw's file-lock + queue approach enables multiple agents working on different tasks in the same project simultaneously.              | High       | Already in spec. The concurrency model (file-level .lock) is the hard part.          |
-| **Live agent indicators on kanban**                             | No competitor shows real-time agent activity on a project board. Linear shows assignees but not live working state. This creates a "mission control" feel that is genuinely new.                                                    | Medium     | Already in spec. Pulsing indicators + session peek. High visual impact.              |
-| **Context injection via PROJECT.md**                            | Unique to OpenClaw's agent architecture. When an agent enters a project directory or receives a message on a project channel, it automatically gets project context. No other tool has this "ambient project awareness."            | Medium     | Already in spec via two paths (cwd pickup + channel hook).                           |
-| **Configurable dashboard widgets**                              | Linear has a fixed dashboard. GitHub Projects has configurable views but not widgets. Per-project widget configuration is a nice touch for power users.                                                                             | Low        | Already in spec. Good differentiator at low cost.                                    |
-| **Configurable kanban columns**                                 | Most tools have this (Linear, GitHub Projects). But markdown-based tools generally do not. Columns in YAML frontmatter is clean.                                                                                                    | Low        | Already in spec.                                                                     |
-| **Project-scoped agent channels**                               | Each project gets a communication channel. Humans can message agents in the context of a specific project. This bridges the gap between "chat with agent" and "manage project" that no competitor bridges well.                     | Medium     | In spec via channel hook. Powerful when combined with context injection.             |
-| **Sub-project hierarchy**                                       | One level deep. backlog.md is flat. Taskmaster is flat. GitHub has sub-issues but not sub-projects. Linear has projects within teams but different semantics.                                                                       | Low        | Already in spec. Keep it one level.                                                  |
-| **Graceful degradation (delete .index/, regenerate)**           | The "if JSON corrupts, just delete it" promise. No database migrations, no state corruption anxiety. This is a developer confidence feature.                                                                                        | Low        | Already in spec. Market this.                                                        |
-
----
+| Feature                                | Value Proposition                                                                                                                                      | Complexity | Notes                                                                                                                                                       |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------------ |
+| Workflow templates (reusable)          | Pre-built patterns for common work types (code feature, research report, ops runbook) reduce decomposition cost and improve consistency                | Medium     | Markdown-based templates in `workflows/templates/`. Parameterized with frontmatter variables. Template selection by goal-matching                           |
+| Workflow synthesis from freeform goals | When no template fits, generate a tailored workflow from natural language. This is the "magic" that distinguishes orchestration from a template engine | High       | LLM-driven: analyze goal, infer task structure, generate workflow + tasks. Quality depends on decomposition prompt engineering                              |
+| Confidence-based human-in-the-loop     | Rather than binary "always ask" or "never ask," route to human based on task risk classification (side_effect_class, approval_required)                | Medium     | Side-effect classes: none, reversible, irreversible. Auto-approve none/reversible; pause-and-ask for irreversible. Configurable thresholds                  |
+| Domain-agnostic capability model       | Same orchestration works for coding, research, ops, and mixed workflows. Most agent systems are code-only                                              | Medium     | Capability tags on tasks (code, research, ops, review, deploy). Orchestrator dispatches to workers with matching capabilities. Not hard-coded to any domain |
+| Adaptive decomposition depth           | Decompose shallowly first; if a task fails, automatically break it down further before retrying                                                        | High       | "Decompose-on-failure" is a recovery strategy. Prevents over-decomposition upfront while handling complexity when needed                                    |
+| Execution mode flexibility             | Tasks can be automatic (agent-executed), manual (human-executed with agent tracking), or interactive (agent proposes, human confirms each step)        | Low        | Frontmatter `execution_mode: auto                                                                                                                           | manual | interactive`. Orchestrator adjusts dispatch and verification accordingly |
+| Workflow composition                   | One workflow can invoke another as a sub-workflow, enabling reuse and nesting                                                                          | Medium     | Sub-workflow reference in task frontmatter. Orchestrator tracks parent/child workflow relationships                                                         |
+| Evidence-based completion              | Tasks produce evidence artifacts (test output, file diffs, API responses) that are recorded and queryable, not just status flags                       | Medium     | Evidence stored alongside task checkpoint. Enables audit trail and post-mortem analysis                                                                     |
 
 ## Anti-Features
 
-Features to explicitly NOT build. Each has a clear reason.
+Features to explicitly NOT build. These are traps that add complexity without proportional value, or conflict with the project's constraints.
 
-| Anti-Feature                                      | Why Avoid                                                                                                                                                               | What to Do Instead                                                                                            |
-| ------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------- |
-| **Database/SQLite for project state**             | Breaks the markdown-as-source-of-truth promise. Agents cannot natively read/write SQLite. Adds migration complexity. backlog.md and taskmd prove files work.            | Keep markdown + auto-generated JSON. The .index/ pattern is the right answer.                                 |
-| **Drag-and-drop kanban in Phase 1**               | Adds significant UI complexity before the data model is validated. Read-only board proves the architecture first. Phase 2 item.                                         | Agents manage board state via markdown. Humans interact via CLI or project channel messages.                  |
-| **Real-time collaborative editing of task files** | CRDTs or OT for markdown files is enormous complexity. Multiple agents writing the same file simultaneously is a recipe for corruption.                                 | File-level .lock for queue writes. Each agent works on its own task file. No contention by design.            |
-| **Complex workflow state machine (Phase 1)**      | Premature abstraction. Need to validate that the basic task/queue model works before adding workflow branching, conditions, and step dependencies.                      | Keep it to simple status transitions (backlog -> in-progress -> review -> done -> blocked). Phase 2.          |
-| **Gantt charts / timeline views**                 | Over-engineering for an agent-first tool. Agents do not need visual timelines. Humans who need Gantt charts should use Linear or GitHub Projects.                       | Kanban board + task list + dashboard widgets cover the visual needs.                                          |
-| **Time tracking / estimation**                    | Scope creep. AI agents do not track time. Human time tracking belongs in dedicated tools (Toggl, Harvest). Adding it muddies the product focus.                         | If needed later, it is a simple frontmatter field addition, not an architecture decision.                     |
-| **Sprint/iteration management**                   | Sprints are a human ceremony concept. AI agents work continuously. Forcing sprint boundaries on agent workflows adds friction with no benefit.                          | Projects have status (active/paused/complete). Tasks have priority. That is sufficient for agent-driven work. |
-| **External integrations (Jira, Linear sync)**     | Phase 1 distraction. Syncing state between OpenClaw markdown and external tools is a maintenance nightmare. Each sync direction has edge cases.                         | Build a great standalone system first. Integrations can come later as plugins if there is demand.             |
-| **User permission/role system**                   | This is a local tool, not a SaaS platform. The filesystem IS the permission model. Adding RBAC to a local markdown tool is over-engineering.                            | Trust the filesystem. The `.lock` file prevents concurrent writes. That is sufficient.                        |
-| **AI-generated task suggestions (Phase 1)**       | Requires approval UI, trust calibration, and a mechanism to prevent agents from flooding the queue with low-quality tasks. Phase 2 item after the basic flow is proven. | Humans and orchestration agents (Phase 2) create tasks deliberately.                                          |
-| **Notification system**                           | Push notifications, email alerts, etc. are SaaS features. OpenClaw agents discover work via heartbeat. Humans check the dashboard or CLI.                               | Dashboard widgets (blockers, recent activity) serve the "what needs attention" use case.                      |
-| **Task templates**                                | Premature. See what patterns emerge from real usage before templating them. Templates added too early calcify bad patterns.                                             | Copy-paste a task file. Markdown makes this trivial.                                                          |
-
----
+| Anti-Feature                                    | Why Avoid                                                                                                                                                                | What to Do Instead                                                                                                                                  |
+| ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Parallel artifact/state system                  | PROJECT.md specifies "no parallel storage." Building a separate state store fragments the source of truth                                                                | Compose with existing project/task/queue/checkpoint primitives. Workflow state lives in workflow files + task frontmatter                           |
+| Full durable execution runtime (Temporal-style) | Massive infrastructure complexity for a layer that sits on top of an existing system. OpenAI Codex uses Temporal but they run cloud sandboxes; this is a local CLI agent | Use checkpoint-based resumability (already exists). Idempotency keys on side-effecting tasks. "Good enough" durability without a runtime dependency |
+| Visual workflow builder / DAG editor            | UI complexity explosion. The system uses markdown files and CLI; a visual editor is a separate product                                                                   | Markdown workflow files are the "editor." Board/queue views show progress. Template selection is the guided experience                              |
+| Agent-to-agent chat protocol                    | AutoGen-style conversational multi-agent adds complexity and unpredictability. Conversation is not coordination                                                          | Structured task dispatch with typed inputs/outputs. Orchestrator communicates via task assignments, not free-form chat                              |
+| Autonomous production deployment                | PROJECT.md lists "full autonomous production rollout" as out of scope. Side-effecting actions on production systems need human gates                                     | approval_required + side_effect_class gating. Irreversible actions always pause for human confirmation                                              |
+| Deep decomposition chains (>3 levels)           | Research shows deep chains increase failure probability and lose coherence. Each level compounds ambiguity                                                               | Shallow decomposition (2 levels default, 3 max). Use adaptive decomposition-on-failure rather than preemptive deep planning                         |
+| Custom DSL for workflow definition              | Adding a new language increases learning curve and tooling burden. Markdown + frontmatter is the existing pattern                                                        | YAML frontmatter for structured data + markdown body for context/instructions. Consistent with tasks and PROJECT.md                                 |
+| Real-time multi-agent negotiation               | Agents bidding on tasks, negotiating assignments. Adds latency and non-determinism                                                                                       | Orchestrator assigns tasks based on capability match and availability. No negotiation, no bidding                                                   |
+| Workflow versioning / branching                 | Git-style workflow versioning adds massive complexity. Workflows are ephemeral coordination artifacts, not source code                                                   | Workflows are created, run, complete/fail. New goal = new workflow. No version history needed                                                       |
 
 ## Feature Dependencies
 
 ```
-File Structure (folders, PROJECT.md, queue.md, tasks/)
-  |
-  +-- Task CRUD (create/read/update/delete task files)
-  |     |
-  |     +-- Task Status Tracking (frontmatter status field)
-  |     |     |
-  |     |     +-- Task Dependencies (depends_on field + resolution logic)
-  |     |
-  |     +-- Sub-tasks (checkbox items within task body)
-  |
-  +-- Sync Process (file watcher -> .index/ JSON generation)
-  |     |
-  |     +-- WebSocket Events (gateway emits change events)
-  |     |     |
-  |     |     +-- Project List View (reads .index/project.json)
-  |     |     |     |
-  |     |     |     +-- Project Dashboard (widget rendering)
-  |     |     |     |
-  |     |     |     +-- Kanban Board (reads .index/board.json)
-  |     |     |           |
-  |     |     |           +-- Live Agent Indicators (heartbeat -> UI badge)
-  |     |     |
-  |     |     +-- Near-Real-Time UI Updates
-  |     |
-  |     +-- CLI: reindex command
-  |
-  +-- File-Level .lock (concurrency primitive)
-  |     |
-  |     +-- Agent Task Claiming (queue.md write with lock)
-  |           |
-  |           +-- Capability Matching (agent IDENTITY.md tags vs task capabilities)
-  |           |
-  |           +-- Heartbeat Task Pickup (periodic scan + claim cycle)
-  |
-  +-- Context Injection: cwd-based PROJECT.md pickup
-  |
-  +-- Context Injection: channel hook PROJECT.md injection
-  |
-  +-- Checkpoint/Resume (## Checkpoint + ## Log sections)
-  |
-  +-- CLI: create, list, status commands
+Goal-to-tasks decomposition → Workflow file lifecycle (tasks belong to a workflow)
+Workflow file lifecycle → Dependency-aware task dispatch (dispatch reads workflow's tasks)
+Dependency-aware task dispatch → Verification framework (dispatch triggers verification on completion)
+Verification framework → Recovery on failure (failed verification triggers recovery)
+Recovery on failure → Adaptive decomposition depth (decompose-further is a recovery strategy)
+Session resumability → Workflow file lifecycle (resume reads workflow state)
+Project placement logic → Workflow file lifecycle (workflow placed into correct project)
+Workflow templates → Workflow synthesis (synthesis is the fallback when no template matches)
+Confidence-based HITL → Verification framework (HITL is a verification type)
+Evidence-based completion → Verification framework (evidence is verification output)
+Execution mode flexibility → Dependency-aware task dispatch (dispatch respects execution mode)
+Workflow composition → Workflow file lifecycle (sub-workflows are workflow instances)
 ```
-
-**Critical path:** File Structure -> Task CRUD -> Sync Process -> WebSocket Events -> UI Views. Everything else can be developed in parallel once the file structure and sync process exist.
-
-**Parallel workstreams after file structure:**
-
-1. Agent integration (claiming, capability matching, heartbeat) -- independent of UI
-2. UI (project list, dashboard, kanban) -- depends on sync process only
-3. Context injection (cwd + channel hook) -- independent of both UI and claiming
-4. CLI commands -- independent, can develop alongside everything
-
----
 
 ## MVP Recommendation
 
-### Must ship (Phase 1 MVP):
+Build in this order to get end-to-end value fastest:
 
-1. **File structure + Task CRUD** -- Foundation everything builds on
-2. **Sync process (.index/ JSON generation)** -- Enables UI without coupling to markdown parsing
-3. **Task status + priority + dependencies** -- Table stakes for any PM tool (add `depends_on` to spec)
-4. **Agent task claiming via heartbeat** -- Core differentiator; without this, it is just another kanban tool
-5. **Capability-based routing** -- Second core differentiator
-6. **CLI commands** (create, list, status, reindex) -- Developer-facing interface
-7. **Project list view + kanban board (read-only)** -- Visual proof the system works
-8. **Context injection (at least cwd path)** -- Agents need project awareness to work effectively
-9. **Checkpoint/resume** -- Agents WILL be interrupted; without this, work is lost
+### Phase 1: Foundation (must ship together)
 
-### Defer to Phase 1.5 or Phase 2:
+1. **Workflow file lifecycle** -- the structural backbone; everything hangs off this
+2. **Goal-to-tasks decomposition** -- the core value prop; without this, workflows are empty shells
+3. **Dependency-aware task dispatch** -- makes decomposed tasks actually execute
 
-- **Dashboard with configurable widgets** -- Nice but not blocking; a simple project overview page suffices initially
-- **Live agent indicators** -- High visual impact but requires WebSocket plumbing that can come after the board itself works
-- **Channel hook context injection** -- cwd path is sufficient for Phase 1; channel hook adds convenience
-- **Sub-project support** -- Users need to validate the single-project model before nesting
+### Phase 2: Reliability
 
-### Defer to Phase 2:
+4. **Verification framework** -- proves tasks actually succeeded
+5. **Recovery on failure** -- handles the inevitable failures
+6. **Session resumability** -- workflows survive interruption
 
-- Drag-and-drop kanban
-- Workflow state machine
-- Orchestration agent
-- Stale detection (PM agent)
-- Agent-proposed tasks
-- Workflow templates
+### Phase 3: Intelligence
 
----
+7. **Workflow templates** -- accelerate common patterns
+8. **Workflow synthesis** -- handle novel goals
+9. **Project placement logic** -- automatic organization
+
+### Phase 4: Polish
+
+10. **Confidence-based HITL** -- smart human involvement
+11. **Domain-agnostic capability model** -- multi-domain dispatch
+12. **Evidence-based completion** -- audit trail
+
+Defer: Workflow composition (Phase 5+), Adaptive decomposition depth (Phase 5+), Execution mode flexibility (can be added incrementally to any phase).
+
+## Complexity Budget
+
+| Complexity | Count | Features                                                                                                                                                                                        |
+| ---------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Low        | 2     | Workflow status/progress, Execution mode flexibility                                                                                                                                            |
+| Medium     | 8     | Workflow file lifecycle, Dependency-aware dispatch, Session resumability, Project placement, Workflow templates, Confidence-based HITL, Domain-agnostic capabilities, Evidence-based completion |
+| High       | 4     | Goal-to-tasks decomposition, Verification framework, Recovery on failure, Workflow synthesis                                                                                                    |
+
+Total estimated effort is front-loaded: the three hardest features (decomposition, verification, recovery) are all table stakes. This is inherent to the domain -- orchestration without reliability is worse than no orchestration.
 
 ## Sources
 
-- [Taskmaster AI (claude-task-master)](https://github.com/eyaltoledano/claude-task-master) -- PRD parsing, dependency-aware tasks, MCP tools, autopilot
-- [Taskmaster AI Capabilities](https://www.sidetool.co/post/taskmaster-ai-capabilities-streamline-your-development-workflows/) -- Feature deep-dive
-- [Linear AI Features 2026](https://www.eesel.ai/blog/linear-ai) -- AI triage, agent-as-teammate, coding deeplinks
-- [Linear Agent announcement](https://www.theregister.com/2026/03/26/linear_agent/) -- "Issue tracking is dead," agentic workflows
-- [GitHub Projects: Issues](https://github.com/features/issues) -- Sub-issues, task lists, flexible views
-- [GitHub Agentic Workflows](https://github.blog/ai-and-ml/automate-repository-tasks-with-github-agentic-workflows/) -- Markdown-authored agent automations in Actions
-- [Cursor Product Page](https://cursor.com/product) -- Agent mode, plan mode, parallel agents
-- [Cursor Beta Features 2026](https://markaicode.com/cursor-beta-features-2026/) -- Automations, cloud agents, MCP plugins
-- [GSD Framework (v2)](https://github.com/gsd-build/gsd-2) -- Spec-driven development, fresh subagent contexts, context rot prevention
-- [GSD Beginner's Guide](https://dev.to/alikazmidev/the-complete-beginners-guide-to-gsd-get-shit-done-framework-for-claude-code-24h0) -- Slash command workflow, .planning/ directory
-- [backlog.md](https://dev.to/thedavestack/transform-project-management-with-git-and-ai-backlogmd-28d0) -- Git-native markdown PM, React kanban
-- [MDTM (Roo Commander)](https://github.com/jezweb/roo-commander/wiki/02_Core_Concepts-03_MDTM_Explained) -- TOML frontmatter, status-driven task files
-- [taskmd](https://medium.com/@driangle/taskmd-task-management-for-the-ai-era-92d8b476e24e) -- YAML frontmatter, AI-agent-first markdown tasks
+- [Task Decomposition Agent Pattern](https://www.agentpatterns.tech/en/agent-patterns/task-decomposition-agent)
+- [Deep Dive into Agent Task Decomposition Techniques](https://sparkco.ai/blog/deep-dive-into-agent-task-decomposition-techniques)
+- [Agents Need Durable Workflows and Strong Guarantees](https://stack.convex.dev/durable-workflows-and-strong-guarantees)
+- [Multi-agent workflows often fail (GitHub Blog)](https://github.blog/ai-and-ml/generative-ai/multi-agent-workflows-often-fail-heres-how-to-engineer-ones-that-dont/)
+- [Error Handling in Agentic Systems](https://agentsarcade.com/blog/error-handling-agentic-systems-retries-rollbacks-graceful-failure)
+- [Human-in-the-Loop AI Agents (StackAI)](https://www.stackai.com/insights/human-in-the-loop-ai-agents-how-to-design-approval-workflows-for-safe-and-scalable-automation)
+- [Human-in-the-loop patterns (Cloudflare)](https://developers.cloudflare.com/agents/guides/human-in-the-loop/)
+- [Checkpoints Are Not Durable Execution (Diagrid)](https://www.diagrid.io/blog/checkpoints-are-not-durable-execution-why-langgraph-crewai-google-adk-and-others-fall-short-for-production-agent-workflows)
+- [Durable Execution for AI Agents (inference.sh)](https://inference.sh/blog/agent-runtime/durable-execution)
+- [20 Agentic AI Workflow Patterns (Skywork)](https://skywork.ai/blog/agentic-ai-examples-workflow-patterns-2025/)
+- [2026 Guide to Agentic Workflow Architectures (StackAI)](https://www.stackai.com/blog/the-2026-guide-to-agentic-workflow-architectures)
+- [Multi-Agent Coordination Strategies (Galileo)](https://galileo.ai/blog/multi-agent-coordination-strategies)
+- [AI Agent Orchestration Frameworks Comparison (o-mega)](https://o-mega.ai/articles/langgraph-vs-crewai-vs-autogen-top-10-agent-frameworks-2026)

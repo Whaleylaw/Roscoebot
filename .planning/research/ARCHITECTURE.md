@@ -1,410 +1,431 @@
-# Architecture Patterns
+# Architecture Research
 
-**Domain:** File-based project management system integrated into an existing agent platform
-**Researched:** 2026-03-26
+**Domain:** AI agent workflow orchestration layer (brownfield, on top of existing project/task/queue/checkpoint system)
+**Researched:** 2026-03-28
+**Confidence:** MEDIUM-HIGH
 
-## Recommended Architecture
+## Standard Architecture
 
 ### System Overview
 
 ```
-                    Agents (write)              Humans (CLI)
-                        |                           |
-                        v                           v
-              ~/.openclaw/projects/*/
-              (Markdown source of truth)
-                        |
-                        v
-              +-----------------------+
-              | ProjectFileWatcher    |  (chokidar, runs inside gateway)
-              | - debounced FS events |
-              | - frontmatter parse   |
-              | - .index/ JSON write  |
-              +-----------------------+
-                        |
-              +---------+---------+
-              |                   |
-              v                   v
-        .index/*.json       WebSocket broadcast
-        (derived data)      ("projects.*" events)
-              |                   |
-              v                   v
-        CLI reads            Lit UI components
-        (projects status)    (sidebar, dashboard, kanban)
+┌─────────────────────────────────────────────────────────────────┐
+│                      Intake & Placement                          │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │
+│  │ Goal Parser  │  │ Project      │  │ Workflow     │           │
+│  │              │  │ Placer       │  │ Selector     │           │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘           │
+│         └─────────────────┼─────────────────┘                   │
+├───────────────────────────┼─────────────────────────────────────┤
+│                    Orchestration Core                             │
+│  ┌──────────────┐  ┌──────┴───────┐  ┌──────────────┐           │
+│  │ Decomposition│  │ DAG          │  │ Verification │           │
+│  │ Engine       │──│ Scheduler    │──│ Framework    │           │
+│  └──────────────┘  └──────┬───────┘  └──────────────┘           │
+│                           │                                      │
+│  ┌──────────────┐  ┌──────┴───────┐  ┌──────────────┐           │
+│  │ Recovery     │  │ Dispatch     │  │ Workflow     │           │
+│  │ Policy       │──│ Controller   │──│ State Machine│           │
+│  └──────────────┘  └──────┬───────┘  └──────────────┘           │
+├───────────────────────────┼─────────────────────────────────────┤
+│                  Existing Project Substrate                       │
+│  ┌──────────┐  ┌──────────┤  ┌──────────┐  ┌──────────┐         │
+│  │ Tasks/   │  │ queue.md │  │Checkpoint│  │ .index/  │         │
+│  │ TASK-NNN │  │          │  │ sidecars  │  │ JSON     │         │
+│  └──────────┘  └──────────┘  └──────────┘  └──────────┘         │
+│  ┌──────────┐  ┌──────────┐                                      │
+│  │PROJECT.md│  │Heartbeat │                                      │
+│  │          │  │ Scanner  │                                      │
+│  └──────────┘  └──────────┘                                      │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-The architecture follows the existing codebase pattern: a gateway-hosted service that watches files, maintains derived state, and broadcasts events over the existing WebSocket protocol. This is the same pattern used by `config-reload.ts` (chokidar watcher with debounce) and `server-chat.ts` (WebSocket broadcast to connected clients).
+The architecture is a three-layer cake. The top layer handles user intent (parsing goals, placing them into projects, selecting or synthesizing workflows). The middle layer is the orchestration core that decomposes workflows into tasks, schedules execution respecting the dependency DAG, dispatches to workers, verifies results, and handles recovery. The bottom layer is the existing project substrate -- tasks, queue, checkpoints, indexes -- which remains the single source of truth for all state.
 
-### Component Boundaries
+### Component Responsibilities
 
-| Component                    | Location                                                 | Responsibility                                                                   | Communicates With                               |
-| ---------------------------- | -------------------------------------------------------- | -------------------------------------------------------------------------------- | ----------------------------------------------- | ------ | -------- | ------------------------------------------------- |
-| **ProjectFileWatcher**       | `src/projects/watcher.ts`                                | Watch `~/.openclaw/projects/` for markdown changes, debounce, trigger sync       | ProjectIndexer, gateway broadcast               |
-| **ProjectIndexer**           | `src/projects/indexer.ts`                                | Parse YAML frontmatter from markdown, write `.index/` JSON files                 | ProjectFileWatcher (input), filesystem (output) |
-| **ProjectService**           | `src/projects/service.ts`                                | Orchestrate watcher + indexer lifecycle, expose read API for gateway methods     | Watcher, Indexer, gateway server                |
-| **ProjectLock**              | `src/projects/lock.ts`                                   | File-level `.lock` acquire/release with stale timeout (60s)                      | Filesystem only                                 |
-| **Gateway methods**          | `src/gateway/server-methods/projects.ts`                 | Handle `projects.*` WebSocket RPC (list, get, board, queue)                      | ProjectService, WebSocket clients               |
-| **Gateway events**           | Added to `GATEWAY_EVENTS` array                          | Broadcast `projects.changed`, `projects.board.changed`, `projects.queue.changed` | WebSocket clients (UI)                          |
-| **CLI commands**             | `src/cli/projects-cli.ts`                                | `openclaw projects create                                                        | list                                            | status | reindex` | ProjectService (via direct import or gateway RPC) |
-| **Post-compaction hook**     | Extend `src/auto-reply/reply/post-compaction-context.ts` | Detect `PROJECT.md` in cwd, inject into agent context                            | Existing post-compaction flow                   |
-| **Bootstrap hook**           | Register via `src/hooks/internal-hooks.ts`               | Inject `PROJECT.md` content when agent starts in project channel                 | Existing `agent:bootstrap` hook system          |
-| **Heartbeat pickup**         | Extend heartbeat runner or add cron-style job            | Scan queue.md, match capabilities, claim tasks                                   | ProjectLock, queue.md files                     |
-| **UI: ProjectsController**   | `ui/src/ui/controllers/projects.ts`                      | Manage project state, subscribe to WebSocket events, expose data to views        | Gateway WebSocket, view layer                   |
-| **UI: ProjectListView**      | `ui/src/ui/views/projects-list.ts`                       | Render project list from controller state                                        | ProjectsController                              |
-| **UI: ProjectDashboardView** | `ui/src/ui/views/projects-dashboard.ts`                  | Render configurable widget grid for a project                                    | ProjectsController                              |
-| **UI: ProjectKanbanView**    | `ui/src/ui/views/projects-kanban.ts`                     | Render read-only kanban board with live agent indicators                         | ProjectsController                              |
+| Component              | Responsibility                                           | Integration Point                                        |
+| ---------------------- | -------------------------------------------------------- | -------------------------------------------------------- |
+| Goal Parser            | Extract structured intent from natural language          | Produces a goal spec consumed by Project Placer          |
+| Project Placer         | Determine existing project vs new project vs sub-project | Reads existing project index; creates via ProjectManager |
+| Workflow Selector      | Match goal to workflow template or trigger synthesis     | Reads `workflows/` templates; outputs WF-NNN.md          |
+| Decomposition Engine   | Break workflow steps into executable TASK-NNN.md files   | Writes task files + queue entries via QueueManager       |
+| DAG Scheduler          | Topological ordering, parallel-when-safe dispatch        | Reads `depends_on` from task frontmatter                 |
+| Dispatch Controller    | Assign tasks to agents by capability match               | Uses existing heartbeat scanner's capability matching    |
+| Verification Framework | Validate task completion per verification_type           | Reads checkpoint + task outputs; writes evidence         |
+| Recovery Policy        | Retry / decompose further / reroute / escalate           | Modifies task status; may re-queue or create sub-tasks   |
+| Workflow State Machine | Track workflow-level progress across its tasks           | Reads/writes WF-NNN.md frontmatter                       |
 
-### Data Flow
-
-**Write path (Agent/CLI -> Markdown -> JSON -> UI):**
+## Recommended Project Structure
 
 ```
-1. Agent writes TASK-003.md with YAML frontmatter
-2. chokidar detects file change in ~/.openclaw/projects/my-project/tasks/
-3. ProjectFileWatcher debounces (300ms, matching config-reload pattern)
-4. ProjectIndexer reads TASK-003.md, parses frontmatter only (fast path)
-5. ProjectIndexer rebuilds .index/board.json (aggregated task summaries)
-6. ProjectService calls gateway broadcast("projects.board.changed", { project: "my-project" })
-7. UI ProjectsController receives WebSocket event
-8. Controller fetches updated board data via projects.board.get RPC
-9. Lit view re-renders kanban cards
+src/orchestration/                  # New orchestration module
+├── intake/                         # Goal parsing and project placement
+│   ├── goal-parser.ts              # Extract structured intent from NL
+│   ├── project-placer.ts           # Existing vs new project decision
+│   └── types.ts                    # GoalSpec, PlacementResult types
+├── workflows/                      # Workflow file management
+│   ├── workflow-schema.ts          # WF frontmatter schema (zod)
+│   ├── workflow-selector.ts        # Template matching logic
+│   ├── workflow-synthesizer.ts     # Generate workflow from goal when no template fits
+│   ├── workflow-state.ts           # Workflow state machine (pending→active→done)
+│   └── types.ts                    # WorkflowFrontmatter, WorkflowStep types
+├── decomposition/                  # Task decomposition from workflow steps
+│   ├── decomposer.ts              # Workflow steps → TASK-NNN.md files
+│   ├── task-author.ts             # Structured task content generator
+│   └── dependency-graph.ts         # Build and validate DAG from depends_on
+├── scheduler/                      # DAG-aware task scheduling
+│   ├── dag-scheduler.ts           # Topological sort, ready-set computation
+│   ├── dispatch-controller.ts     # Agent assignment and parallel dispatch
+│   └── execution-tracker.ts       # Track in-flight tasks, completion events
+├── verification/                   # Task and workflow verification
+│   ├── verification-runner.ts     # Route to correct verifier by type
+│   ├── verifiers/                 # Per-type verifiers
+│   │   ├── automatic.ts           # LLM or script-based checks
+│   │   ├── human.ts               # Queue for human review
+│   │   └── external.ts            # External service checks
+│   └── evidence.ts                # Evidence recording format
+├── recovery/                       # Failure handling
+│   ├── recovery-policy.ts         # Retry/decompose/reroute/escalate logic
+│   ├── budget-tracker.ts          # Anti-loop retry budgets
+│   └── escalation.ts              # Human escalation path
+├── orchestrator-agent.ts          # Orchestrator agent type entry point
+└── index.ts                       # Public barrel exports
+
+~/.openclaw/projects/{name}/
+├── PROJECT.md                     # (existing)
+├── queue.md                       # (existing)
+├── tasks/
+│   ├── TASK-001.md                # (existing format, extended frontmatter)
+│   ├── TASK-001.checkpoint.json   # (existing)
+│   └── ...
+├── workflows/                     # NEW: first-class workflow files
+│   ├── WF-001.md                  # Workflow definition + state
+│   └── WF-002.md
+└── .index/                        # (existing, extended with workflow index)
+    ├── project.json
+    ├── board.json
+    ├── queue.json
+    └── workflows.json             # NEW: workflow index
 ```
 
-**Read path (UI -> Gateway -> JSON):**
+### Structure Rationale
 
-```
-1. User navigates to Projects tab
-2. ProjectsController calls projects.list via WebSocket RPC
-3. Gateway handler reads .index/project.json from each project dir
-4. Returns array of project summaries
-5. User clicks project -> calls projects.get + projects.board.get
-6. Gateway reads .index/project.json + .index/board.json
-7. Dashboard and kanban views render from JSON data
-```
+- **src/orchestration/:** Isolated module boundary. Does not pollute existing `src/projects/` or `src/agents/`. Clean import surface for gateway RPC methods and agent tools.
+- **intake/ separate from decomposition/:** Intake is about understanding what the user wants and where it goes. Decomposition is about translating a workflow into tasks. Different concerns, different change rates.
+- **scheduler/ separate from decomposition/:** Decomposition produces the DAG. Scheduling consumes it. Decomposition happens once per workflow; scheduling is ongoing as tasks complete.
+- **workflows/ in project dir:** Consistent with existing markdown-on-disk pattern (PROJECT.md, tasks/). Human-readable. Agent-parseable. No new storage layer.
 
-**Context injection path (Agent starts -> PROJECT.md injected):**
+## Architectural Patterns
 
-```
-Path 1 (cwd-based):
-1. Agent cd's into ~/.openclaw/projects/my-project/
-2. Post-compaction context loader finds PROJECT.md (extends existing AGENTS.md detection)
-3. PROJECT.md body (not frontmatter) injected into agent context
+### Pattern 1: Orchestrator-as-Dedicated-Agent
 
-Path 2 (channel hook):
-1. Message arrives on project-associated channel
-2. agent:bootstrap hook fires
-3. Hook reads PROJECT.md from associated project path
-4. Injects body content as bootstrap file
-```
+**What:** The orchestrator is a specialized agent type spawned by the main agent via ACP (Agent Communication Protocol). It gets its own context window, system prompt, and tool set tailored for coordination rather than execution.
 
-**Task claim path (Heartbeat -> Queue -> Lock -> Claim):**
+**When to use:** Always, for any workflow involving more than a single task. The orchestrator owns the workflow lifecycle; worker agents own individual task execution.
 
-```
-1. Heartbeat fires for agent
-2. Agent reads own IDENTITY.md capability tags
-3. Scans queue.md files for Available tasks matching capabilities
-4. Attempts to acquire .lock (atomic file create, fail if exists)
-5. On lock acquired: moves task from Available to Claimed in queue.md, updates task frontmatter
-6. Deletes .lock
-7. Reads task file, resumes from checkpoint, begins work
-```
+**Trade-offs:** Extra context window cost (orchestrator + N workers vs single agent), but clean separation means the orchestrator never fills its context with execution details it does not need. Anthropic's research system showed 90% improvement with this pattern.
 
-## Patterns to Follow
-
-### Pattern 1: Chokidar Watcher with Debounce (from config-reload.ts)
-
-**What:** Use chokidar (already a dependency at v5.x) to watch project directories. Debounce changes at 300ms (same as config reload default). Handle missing-file retries for atomic writes.
-
-**When:** All file watching in the project system.
-
-**Example:**
+**Integration with existing system:** The existing `acp-spawn.ts` already supports spawning subagents with tasks, labels, and agent IDs. The orchestrator agent type would be registered as a new agent scope (alongside the existing agent types), spawned via the same ACP infrastructure.
 
 ```typescript
-// src/projects/watcher.ts
-import chokidar from "chokidar";
+// Orchestrator spawns a worker for a specific task
+const result = await spawnAcp({
+  task: `Execute task TASK-003 in project ${projectName}`,
+  agentId: workerAgentId,
+  label: `worker:${taskId}`,
+  mode: "run",
+});
+```
 
-export type ProjectWatcher = {
-  stop: () => Promise<void>;
-};
+### Pattern 2: Workflow-as-State-Machine on Markdown
 
-export function startProjectWatcher(opts: {
-  projectsDir: string;
-  onChanged: (projectId: string, changedPath: string) => void;
-  debounceMs?: number;
-  log: { info: (msg: string) => void; warn: (msg: string) => void };
-}): ProjectWatcher {
-  const debounceMs = opts.debounceMs ?? 300;
-  // Watch PROJECT.md, queue.md, and tasks/*.md
-  const watcher = chokidar.watch(
-    [
-      `${opts.projectsDir}/*/PROJECT.md`,
-      `${opts.projectsDir}/*/queue.md`,
-      `${opts.projectsDir}/*/tasks/*.md`,
-      `${opts.projectsDir}/*/sub-projects/*/PROJECT.md`,
-      `${opts.projectsDir}/*/sub-projects/*/queue.md`,
-      `${opts.projectsDir}/*/sub-projects/*/tasks/*.md`,
-    ],
-    { ignoreInitial: true, awaitWriteFinish: { stabilityThreshold: 200 } },
+**What:** Each WF-NNN.md file has frontmatter tracking the workflow's lifecycle state, and the body contains the workflow steps. State transitions are atomic writes to the file. The workflow state machine is: `pending -> active -> verifying -> done | failed | blocked`.
+
+**When to use:** Every workflow. The state machine is the single source of truth for whether the orchestrator should advance, wait, retry, or escalate.
+
+**Trade-offs:** Markdown-on-disk is slower than a database but consistent with the existing project system. File locking (already solved for queue.md) prevents concurrent corruption. The trade-off is appropriate because workflow state changes are infrequent (task-completion granularity, not per-token).
+
+```markdown
+---
+id: WF-001
+title: "Implement user authentication"
+status: active # pending | active | verifying | done | failed | blocked
+created: 2026-03-28
+updated: 2026-03-28
+tasks: [TASK-001, TASK-002, TASK-003, TASK-004]
+current_step: 2
+total_steps: 4
+recovery_budget: 3 # remaining retries before escalation
+---
+
+## Steps
+
+1. **Design auth schema** -> TASK-001 (done)
+2. **Implement login endpoint** -> TASK-002 (in-progress)
+3. **Add session middleware** -> TASK-003 (backlog, depends: TASK-002)
+4. **Write integration tests** -> TASK-004 (backlog, depends: TASK-003)
+```
+
+### Pattern 3: DAG Scheduling via Existing depends_on
+
+**What:** The task DAG is expressed entirely through the existing `depends_on` field in task frontmatter. The scheduler computes the "ready set" (tasks whose dependencies are all `done`) and dispatches them in parallel. No new DAG storage needed.
+
+**When to use:** All multi-task workflows. Even linear sequences are expressed as a chain of depends_on.
+
+**Trade-offs:** Reading N task files to compute the ready set is O(N) disk reads per scheduling cycle. For projects with <100 tasks this is negligible (<10ms). For larger projects, the .index/board.json can serve as a cache of task statuses, reducing to a single file read.
+
+**Implementation approach:**
+
+```typescript
+// Compute which tasks are ready to dispatch
+function computeReadySet(workflowTasks: TaskFrontmatter[]): TaskFrontmatter[] {
+  const doneIds = new Set(workflowTasks.filter((t) => t.status === "done").map((t) => t.id));
+  return workflowTasks.filter(
+    (t) => t.status === "backlog" && t.depends_on.every((dep) => doneIds.has(dep)),
   );
-  // Debounce per project, then call onChanged
-  // ...
 }
 ```
 
-**Rationale:** The codebase already uses this exact pattern for config reloading. `awaitWriteFinish` handles agents writing files non-atomically (writing content in chunks rather than rename-into-place).
+### Pattern 4: Verification-as-Evidence-Chain
 
-### Pattern 2: Gateway WebSocket Methods + Events (from cron, sessions)
+**What:** Each task has a `verification_type` in frontmatter (automatic, human, external, mixed). On task completion, the verification framework runs the appropriate verifier and records structured evidence in the checkpoint sidecar's `log` array.
 
-**What:** Register new gateway methods in `server-methods-list.ts` and add event types to `GATEWAY_EVENTS`. Follow the existing RPC pattern: client sends method name + params, gateway returns result.
+**When to use:** Every task completion. Verification is not optional -- it is the signal that allows the DAG scheduler to advance.
 
-**When:** All UI-to-gateway communication for project data.
-
-**Example:**
+**Trade-offs:** Automatic verification requires LLM calls (cost). Human verification blocks the workflow until a human responds. The trade-off is controlled by the workflow author choosing the verification_type per task.
 
 ```typescript
-// New methods to add to BASE_METHODS:
-"projects.list",
-"projects.get",
-"projects.board.get",
-"projects.queue.get",
-"projects.reindex",
-
-// New events to add to GATEWAY_EVENTS:
-"projects.changed",
-"projects.board.changed",
-"projects.queue.changed",
+interface VerificationEvidence {
+  type: "automatic" | "human" | "external";
+  passed: boolean;
+  timestamp: string;
+  details: string;
+  artifacts?: string[]; // paths to output files
+}
 ```
 
-**Rationale:** The cron system (`cron.list`, `cron.status`, `cron.add`, etc.) and sessions system (`sessions.list`, `sessions.subscribe`, etc.) follow this pattern. The UI already has infrastructure to call methods and subscribe to events.
+### Pattern 5: Recovery with Anti-Loop Budget
 
-### Pattern 3: Controller + View Separation (from cron, agents)
+**What:** When a task fails verification, the recovery policy checks the workflow's `recovery_budget`. If budget remains: retry (re-queue), decompose further (split into sub-tasks), or reroute (different agent/capability). If budget exhausted: block the workflow and escalate to human.
 
-**What:** UI follows a controller/view split. Controller (`ui/src/ui/controllers/projects.ts`) manages state, calls gateway methods, subscribes to events. View (`ui/src/ui/views/projects-*.ts`) is a pure render function receiving props.
+**When to use:** Every task failure. The budget prevents infinite retry loops -- a critical production safety mechanism.
 
-**When:** All project UI components.
+**Trade-offs:** Fixed budgets may be too conservative for some tasks and too generous for others. Start with per-workflow budgets (simple), evolve to per-task budgets if needed.
 
-**Example:**
+## Data Flow
+
+### Goal-to-Execution Flow
+
+```
+User Goal (natural language)
+    |
+    v
+[Goal Parser] -> GoalSpec { intent, domain, constraints, size_hint }
+    |
+    v
+[Project Placer] -> ProjectRef { project_dir, is_new, is_sub_project }
+    |                    |
+    |                    v (if new project)
+    |               [ProjectManager.create()]
+    |
+    v
+[Workflow Selector] -> WorkflowRef { wf_id, template_used, steps[] }
+    |                       |
+    |                       v (if no template fits)
+    |                  [Workflow Synthesizer] -> WF-NNN.md
+    |
+    v
+[Decomposition Engine]
+    |-- writes tasks/TASK-NNN.md (with frontmatter: depends_on, capabilities, verification_type)
+    |-- updates queue.md via QueueManager (adds to Available)
+    |-- writes WF-NNN.md (links tasks to steps)
+    |
+    v
+[DAG Scheduler]
+    |-- computes ready set from depends_on graph
+    |-- dispatches ready tasks via Dispatch Controller
+    |
+    v
+[Worker Agent (via ACP spawn)]
+    |-- claims task via heartbeat scanner
+    |-- executes task, updates checkpoint
+    |-- signals completion
+    |
+    v
+[Verification Framework]
+    |-- runs verifier matching task's verification_type
+    |-- records evidence in checkpoint
+    |-- if PASS: marks task done, triggers scheduler re-evaluation
+    |-- if FAIL: triggers Recovery Policy
+    |
+    v
+[Recovery Policy]
+    |-- checks budget
+    |-- retry | decompose | reroute | escalate
+    |-- updates task/queue state accordingly
+    |
+    v
+[Workflow State Machine]
+    |-- when all tasks done + verified: workflow -> done
+    |-- updates WF-NNN.md frontmatter
+```
+
+### State Management
+
+All state lives on disk in the existing project directory structure:
+
+| State                        | Location                          | Read by                               | Written by                          |
+| ---------------------------- | --------------------------------- | ------------------------------------- | ----------------------------------- |
+| Workflow definition + status | `workflows/WF-NNN.md` frontmatter | Scheduler, State Machine, Gateway RPC | Intake, State Machine, Recovery     |
+| Task definition + status     | `tasks/TASK-NNN.md` frontmatter   | Scanner, Scheduler, Verifier          | Decomposer, Worker, Verifier        |
+| Task execution progress      | `tasks/TASK-NNN.checkpoint.json`  | Scanner (resume), Verifier            | Worker agent, Verifier              |
+| Queue position               | `queue.md`                        | Scanner, Scheduler                    | Decomposer, Dispatcher, Recovery    |
+| Indexes (cache)              | `.index/*.json`                   | Gateway RPC, UI                       | ProjectSyncService (on file change) |
+
+The ProjectSyncService (chokidar watcher) already handles index regeneration on file changes. Adding `workflows/` to its watch glob and a `workflows.json` index generator is the only sync-layer change needed.
+
+### Key Data Flows
+
+1. **Claim-Execute-Verify loop:** Heartbeat scanner claims task -> worker executes -> checkpoint updated -> verification runs -> task marked done -> scheduler re-evaluates DAG -> next tasks dispatched. This loop is the core execution engine.
+
+2. **Recovery re-entry:** Failed verification -> recovery policy -> re-queue task (or create sub-tasks) -> they re-enter the Available queue -> heartbeat scanner picks them up. The recovery path re-uses the same claim-execute-verify loop.
+
+3. **Context injection:** The existing `project-context-hook.ts` injects PROJECT.md into agent bootstrap. For the orchestrator agent, extend this to also inject the active WF-NNN.md and a summary of task statuses. For worker agents, inject only the specific TASK-NNN.md content.
+
+## Integration Points
+
+### Existing System Integration
+
+| Boundary                        | Communication                                                                                         | Notes                                                    |
+| ------------------------------- | ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Orchestrator <-> Project System | Direct import of `src/projects/` (QueueManager, checkpoint, frontmatter, schemas)                     | No RPC needed; same process                              |
+| Orchestrator <-> Agent System   | ACP spawn (`src/agents/acp-spawn.ts`) for worker dispatch                                             | Workers are standard agents with project context         |
+| Orchestrator <-> Gateway        | New RPC methods in `server-methods/` (e.g., `workflows.list`, `workflows.get`, `orchestration.start`) | Follows existing pattern in `server-methods/projects.ts` |
+| Orchestrator <-> Sync Service   | Add `workflows/` to ProjectSyncService watch; add `generateWorkflowIndex()`                           | Minimal change to existing sync-service.ts               |
+| Orchestrator <-> Config         | Orchestrator agent type registered in config schema (`config/types.agents.ts`)                        | New agent scope, not new config subsystem                |
+| Worker <-> Orchestrator         | Indirect: worker writes checkpoint -> sync service emits event -> orchestrator reacts                 | No direct coupling between worker and orchestrator       |
+
+### New Gateway RPC Methods
+
+| Method                 | Purpose                                                     |
+| ---------------------- | ----------------------------------------------------------- |
+| `workflows.list`       | List workflows in a project                                 |
+| `workflows.get`        | Get a single workflow with task status summary              |
+| `orchestration.start`  | Accept a goal, trigger the intake -> decomposition pipeline |
+| `orchestration.status` | Get orchestration state for a workflow                      |
+
+### New Frontmatter Extensions
+
+Task frontmatter additions (extend existing `TaskFrontmatterSchema`):
 
 ```typescript
-// ui/src/ui/controllers/projects.ts
-export class ProjectsController {
-  projects: ProjectSummary[] = [];
-  selectedProject: ProjectDetail | null = null;
-  board: BoardData | null = null;
-
-  constructor(private gateway: GatewayConnection) {
-    gateway.on("projects.changed", () => this.refreshList());
-    gateway.on("projects.board.changed", (e) => this.refreshBoard(e.project));
-  }
-}
-
-// ui/src/ui/views/projects-list.ts
-export function renderProjectList(props: ProjectListProps) {
-  return html`...`;
-}
+// Added to TaskFrontmatterSchema
+workflow: z.string().nullable().default(null),           // WF-001
+verification_type: z.enum(["automatic", "human", "external", "mixed"]).default("automatic"),
+side_effect_class: z.enum(["none", "reversible", "irreversible"]).default("none"),
+approval_required: z.boolean().default(false),
+estimated_size: z.enum(["xs", "s", "m", "l", "xl"]).default("m"),
+execution_mode: z.enum(["agent", "human", "tool"]).default("agent"),
 ```
 
-**Rationale:** The cron view (`views/cron.ts`) takes a `CronProps` bag with ~40 props including data and callbacks. The cron controller (`controllers/cron.ts`) manages state. This separation keeps views testable (browser tests render with synthetic props) and controllers logic-focused.
+These are all optional with defaults, so existing tasks remain valid without changes.
 
-### Pattern 4: YAML Frontmatter Parsing with `yaml` Package
+## Build Order (Dependency-Driven)
 
-**What:** Use the existing `yaml` v2.x dependency to parse YAML frontmatter blocks from markdown files. Only parse the frontmatter (between `---` markers), not the body.
-
-**When:** Building `.index/` JSON from markdown source files.
-
-**Example:**
-
-```typescript
-// src/projects/indexer.ts
-import { parse as parseYaml } from "yaml";
-
-export function parseFrontmatter(content: string): { data: Record<string, unknown>; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) return { data: {}, body: content };
-  return { data: parseYaml(match[1]) ?? {}, body: match[2] };
-}
-```
-
-**Rationale:** No need for `gray-matter` -- the `yaml` package is already in `package.json` and frontmatter extraction is a trivial regex + parse. Keeps dependency count flat.
-
-### Pattern 5: File Lock with Stale Timeout
-
-**What:** Use `fs.open` with `O_CREAT | O_EXCL` flags for atomic lock file creation. Include PID and timestamp in lock content for stale detection.
-
-**When:** Queue writes (claiming tasks, releasing tasks).
-
-**Example:**
-
-```typescript
-// src/projects/lock.ts
-import fs from "node:fs";
-
-const STALE_LOCK_MS = 60_000;
-
-export async function acquireLock(lockPath: string): Promise<boolean> {
-  try {
-    const fd = fs.openSync(
-      lockPath,
-      fs.constants.O_CREAT | fs.constants.O_EXCL | fs.constants.O_WRONLY,
-    );
-    fs.writeSync(fd, JSON.stringify({ pid: process.pid, at: Date.now() }));
-    fs.closeSync(fd);
-    return true;
-  } catch (err: unknown) {
-    if ((err as NodeJS.ErrnoException).code === "EEXIST") {
-      // Check staleness
-      const stat = fs.statSync(lockPath, { throwIfNoEntry: false });
-      if (stat && Date.now() - stat.mtimeMs > STALE_LOCK_MS) {
-        fs.unlinkSync(lockPath);
-        return acquireLock(lockPath); // Retry once
-      }
-      return false;
-    }
-    throw err;
-  }
-}
-```
-
-**Rationale:** `O_CREAT | O_EXCL` is atomic on local filesystems. No need for advisory locks or flock. Stale detection at 60s matches design spec.
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Polling JSON from the UI
-
-**What:** Having the UI periodically fetch `.index/` JSON on a timer instead of using WebSocket events.
-
-**Why bad:** Burns network/CPU, introduces latency (poll interval), fights the existing event-driven architecture. The gateway already has broadcast infrastructure.
-
-**Instead:** File watcher detects change, gateway broadcasts event, UI subscribes. Same pattern as `sessions.changed` and `chat` events.
-
-### Anti-Pattern 2: Direct File Reads from the UI Layer
-
-**What:** Having the UI (or gateway HTTP routes) read markdown files directly and parse them on each request.
-
-**Why bad:** Frontmatter parsing on every request is wasteful. Markdown body content is irrelevant to UI. Couples UI to file format.
-
-**Instead:** `.index/` JSON is the UI's data contract. Built once per file change. Fast reads of pre-parsed JSON.
-
-### Anti-Pattern 3: Parsing Full Markdown Body in the Indexer
-
-**What:** Running the markdown body through a markdown parser (remark, marked, etc.) during indexing.
-
-**Why bad:** Slow, unnecessary. The body is only needed for agent context injection (which reads the raw file). The UI only needs frontmatter-derived data.
-
-**Instead:** Parse frontmatter only (regex + YAML parse). Pass raw body through for context injection path.
-
-### Anti-Pattern 4: Storing Project State in SQLite/Database
-
-**What:** Adding a database layer to store project/task state.
-
-**Why bad:** Violates the core design principle. Agents write markdown. Markdown is source of truth. Database introduces sync complexity, migration burden, and makes files non-authoritative.
-
-**Instead:** Markdown files are the database. `.index/` JSON is a materialized view. Delete and regenerate at any time.
-
-### Anti-Pattern 5: Making the Watcher a Separate Process
-
-**What:** Running the project file watcher as a standalone daemon or separate service.
-
-**Why bad:** Adds operational complexity. The gateway already runs chokidar for config reloading. Adding a second watcher in the same process is trivial and shares the event loop.
-
-**Instead:** ProjectService starts alongside the gateway in `server.impl.ts`, just like the config reloader, cron service, and health monitor.
-
-### Anti-Pattern 6: Coupling Task ID Generation to a Counter File
-
-**What:** Storing a `next-id.txt` or similar counter file for task ID sequences.
-
-**Why bad:** Creates a concurrency bottleneck and another file to keep in sync. Counter can desync from actual task files.
-
-**Instead:** Scan `tasks/` directory, parse existing IDs, increment from max. Directory listing is fast for the expected task counts (sub-1000).
-
-## Component Build Order
-
-The build order is driven by data dependencies. Each layer depends on the one below it.
+The components have clear build-order dependencies:
 
 ```
-Phase 1a: Foundation (no dependencies on each other)
-  ├── src/projects/types.ts          — Type definitions for project, task, queue data
-  ├── src/projects/lock.ts           — File locking utility
-  ├── src/projects/indexer.ts        — Frontmatter parser + JSON builder
-  └── src/projects/paths.ts          — Path resolution (~/.openclaw/projects/*)
-
-Phase 1b: Core Services (depends on 1a)
-  ├── src/projects/watcher.ts        — chokidar watcher, debounce, event emission
-  ├── src/projects/service.ts        — Orchestrates watcher + indexer, read API
-  └── src/projects/scaffold.ts       — Create project folder structure (for CLI create)
-
-Phase 1c: Gateway Integration (depends on 1b)
-  ├── src/gateway/server-methods/projects.ts  — WebSocket RPC handlers
-  ├── src/gateway/protocol/schema/projects.ts — Protocol schema for project events
-  └── Integration in server.impl.ts           — Start ProjectService on gateway boot
-
-Phase 1d: Agent Integration (depends on 1a, can parallel with 1c)
-  ├── Extend post-compaction-context.ts       — PROJECT.md cwd detection
-  ├── Register agent:bootstrap hook            — PROJECT.md channel injection
-  └── src/projects/queue-claim.ts             — Task claim logic for heartbeat
-
-Phase 1e: CLI Commands (depends on 1b)
-  └── src/cli/projects-cli.ts                 — create, list, status, reindex
-
-Phase 1f: UI Components (depends on 1c)
-  ├── ui/src/ui/controllers/projects.ts       — State management, WS subscriptions
-  ├── ui/src/ui/views/projects-list.ts        — Project list rendering
-  ├── ui/src/ui/views/projects-dashboard.ts   — Dashboard with configurable widgets
-  ├── ui/src/ui/views/projects-kanban.ts      — Read-only kanban board
-  └── Update navigation.ts                    — Add "Projects" tab group
+Phase 1: Workflow Schema + Files          (foundation -- everything else references workflows)
+   |
+   v
+Phase 2: Decomposition Engine             (needs workflow schema to produce tasks)
+   |
+   v
+Phase 3: DAG Scheduler + Dispatch         (needs tasks with depends_on to schedule)
+   |
+   v
+Phase 4: Verification Framework           (needs completed tasks to verify)
+   |
+   v
+Phase 5: Recovery Policy                  (needs verification results to trigger recovery)
+   |
+   v
+Phase 6: Intake Pipeline                  (needs all downstream components to be end-to-end)
+   |
+   v
+Phase 7: Orchestrator Agent Type          (wraps everything as a spawnable agent)
 ```
 
-**Dependency rationale:**
+**Why this order:**
 
-- Types and utilities (1a) have zero dependencies and can be built first
-- Watcher and service (1b) need types and indexer
-- Gateway methods (1c) need the service to call into
-- Agent integration (1d) only needs types and path resolution, so it can proceed in parallel with gateway work
-- CLI (1e) needs the service for create/reindex, can read JSON for list/status
-- UI (1f) depends on gateway methods being available to call
+- Workflow schema first because every component references WF-NNN.md files
+- Decomposition before scheduling because the scheduler needs tasks to exist
+- Verification before recovery because recovery is triggered by verification failure
+- Intake last (before final agent wiring) because it needs to call decomposition which needs scheduling which needs verification -- the full downstream chain must exist
+- Orchestrator agent type wraps everything and is the integration surface
 
-**Critical path:** 1a -> 1b -> 1c -> 1f (this is the shortest path to a visible UI)
+**Alternative: MVP shortcut.** Build phases 1-3 first as a manually-triggered pipeline (CLI command creates workflow + tasks + dispatches). This proves the core loop without intake intelligence or recovery. Then layer on verification (4), recovery (5), intake (6), and agent wiring (7).
 
-**Parallelizable:** 1d (agent integration) and 1e (CLI) can proceed alongside 1c and 1f
+## Anti-Patterns
 
-## Scalability Considerations
+### Anti-Pattern 1: Orchestrator Executes Tasks Directly
 
-| Concern                     | At 5 projects / 50 tasks                         | At 50 projects / 500 tasks                                           | At 500 projects / 5000 tasks                                              |
-| --------------------------- | ------------------------------------------------ | -------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| **File watching**           | Single chokidar instance, negligible             | Single chokidar instance, fine (chokidar handles thousands of paths) | May need to limit watched depth or use polling fallback                   |
-| **Index rebuild**           | Rebuild full project index on any change (<10ms) | Per-project rebuild only (isolate by project directory)              | Per-file incremental update (only rebuild the changed task in board.json) |
-| **WebSocket events**        | Broadcast every change                           | Broadcast per-project (UI filters by active project)                 | Add subscription model (UI subscribes to specific projects)               |
-| **Gateway startup reindex** | Full reindex in <100ms                           | Full reindex in <1s                                                  | Lazy reindex (index on first access per project)                          |
-| **Queue scanning**          | Scan all queue.md files                          | Scan only assigned project queues                                    | Cache parsed queue data in memory, invalidate on file change              |
+**What people do:** The orchestrator agent tries to both coordinate and execute tasks in its own context window.
+**Why it's wrong:** Context pollution. The orchestrator's context fills with execution details (code, file contents, error traces) that are irrelevant to coordination. Anthropic's research showed dedicated subagents outperform single-agent execution by 90%.
+**Do this instead:** Orchestrator only reads task status and verification results. Workers handle execution in their own context windows via ACP spawn.
 
-**Practical ceiling:** The filesystem-based approach is well-suited for the expected usage pattern (1-20 active projects, 10-100 tasks per project). The 500+ project scenario is unlikely but manageable with the incremental strategies noted above.
+### Anti-Pattern 2: Parallel State Store
 
-## Integration Seams (Existing Code Touchpoints)
+**What people do:** Create a separate database or state store for orchestration alongside the existing markdown files.
+**Why it's wrong:** Two sources of truth for task status inevitably drift. State reconciliation code is a permanent maintenance burden.
+**Do this instead:** Use the existing project substrate (tasks/, queue.md, checkpoints) as the only state store. The orchestration layer reads from and writes to the same files.
 
-These are the specific existing files that need modification:
+### Anti-Pattern 3: Eager Full Decomposition
 
-| File                                              | Change                                                  | Risk                                                     |
-| ------------------------------------------------- | ------------------------------------------------------- | -------------------------------------------------------- |
-| `src/gateway/server.impl.ts`                      | Start ProjectService alongside other services           | LOW -- additive, follows existing pattern                |
-| `src/gateway/server-methods-list.ts`              | Add `projects.*` to `BASE_METHODS` and `GATEWAY_EVENTS` | LOW -- append-only                                       |
-| `src/auto-reply/reply/post-compaction-context.ts` | Add `PROJECT.md` detection alongside `AGENTS.md`        | MEDIUM -- core agent context path, needs careful testing |
-| `src/hooks/internal-hooks.ts`                     | Register project bootstrap hook                         | LOW -- additive                                          |
-| `ui/src/ui/navigation.ts`                         | Add `"projects"` tab to `TAB_GROUPS`                    | LOW -- additive, existing tests verify all tabs          |
-| `ui/src/ui/app-render.ts`                         | Add project view routing                                | LOW -- follows existing view routing pattern             |
-| `src/infra/heartbeat-runner.ts`                   | Add task pickup to heartbeat cycle                      | MEDIUM -- heartbeat is complex, needs isolation          |
+**What people do:** Decompose the entire workflow into all tasks upfront before executing any.
+**Why it's wrong:** Later tasks often depend on the output of earlier tasks for accurate specification. A task like "fix the bug found in step 3" cannot be meaningfully authored before step 3 executes.
+**Do this instead:** Decompose in waves. Create the first batch of tasks (those with no dependencies). As they complete, decompose the next wave with the benefit of their outputs. The workflow file tracks which steps have been decomposed.
+
+### Anti-Pattern 4: No Retry Budget
+
+**What people do:** Allow unlimited retries on failed tasks.
+**Why it's wrong:** Infinite retry loops burn tokens and never converge. If a task fails 3 times with the same approach, retrying a 4th time with the same agent and prompt will not produce a different result.
+**Do this instead:** Fixed recovery budget per workflow (default: 3). Each retry, decomposition, or reroute decrements the budget. Budget exhausted = escalate to human.
+
+### Anti-Pattern 5: Tight Coupling Between Orchestrator and Worker
+
+**What people do:** Orchestrator directly calls worker functions or shares in-memory state.
+**Why it's wrong:** Workers must be replaceable (different agent, different model, different capability set). Direct coupling prevents this.
+**Do this instead:** Communicate through the filesystem. Orchestrator writes task file + queue entry. Worker claims via scanner. Worker writes checkpoint. Orchestrator reads checkpoint. The filesystem is the message bus.
+
+## Scaling Considerations
+
+| Scale                   | Architecture Adjustments                                                                                               |
+| ----------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| 1-5 concurrent tasks    | Single orchestrator, sequential DAG evaluation. Current heartbeat scanner is sufficient.                               |
+| 5-20 concurrent tasks   | Batch DAG evaluation (compute full ready set). Parallel ACP spawns. Index cache for status reads.                      |
+| 20-100 concurrent tasks | Move DAG state to .index/dag.json (computed, not authoritative). Add workflow-level queue for multi-workflow projects. |
+| 100+ concurrent tasks   | This is unlikely for a single project. If needed, partition into sub-projects with independent orchestrators.          |
+
+### Scaling Priorities
+
+1. **First bottleneck: Task file reads during scheduling.** Computing the ready set requires reading every task's frontmatter in the workflow. Mitigate by using `.index/board.json` as a cache (already generated by ProjectSyncService on file changes).
+
+2. **Second bottleneck: Queue lock contention.** Multiple orchestrators or workers claiming/completing tasks compete for queue.md's file lock. The existing 3-retry exponential backoff handles moderate contention. For higher contention, batch queue operations (claim multiple tasks in one lock acquisition).
 
 ## Sources
 
-- Existing `src/gateway/config-reload.ts` -- chokidar watcher + debounce pattern (HIGH confidence, direct code reading)
-- Existing `src/gateway/server-methods-list.ts` -- gateway RPC method/event registration (HIGH confidence)
-- Existing `ui/src/ui/navigation.ts` -- sidebar tab group structure (HIGH confidence)
-- Existing `ui/src/ui/views/cron.ts` + `ui/src/ui/controllers/cron.ts` -- controller/view separation pattern (HIGH confidence)
-- Existing `src/auto-reply/reply/post-compaction-context.ts` -- cwd-based context injection seam (HIGH confidence)
-- Existing `src/agents/bootstrap-hooks.test.ts` -- `agent:bootstrap` hook API (HIGH confidence)
-- Design spec at `docs/superpowers/specs/2026-03-26-project-management-design.md` (HIGH confidence, authoritative)
-- `yaml` v2.x already in `package.json` dependencies (HIGH confidence)
-- `chokidar` v5.x already in `package.json` dependencies (HIGH confidence)
+- [Anthropic: How we built our multi-agent research system](https://www.anthropic.com/engineering/multi-agent-research-system) -- orchestrator-worker separation, task delegation, scaling effort
+- [Anthropic: Building effective agents](https://www.anthropic.com/research/building-effective-agents) -- composable patterns, orchestrator-worker
+- [Microsoft: AI Agent Orchestration Patterns](https://learn.microsoft.com/en-us/azure/architecture/ai-ml/guide/ai-agent-design-patterns) -- DAG patterns, state management
+- [LangGraph multi-agent orchestration](https://latenode.com/blog/ai-frameworks-technical-infrastructure/langgraph-multi-agent-orchestration/langgraph-multi-agent-orchestration-complete-framework-guide-architecture-analysis-2025) -- StateGraph, checkpointing, conditional branching
+- [Task Decomposition Agent Pattern](https://www.agentpatterns.tech/en/agent-patterns/task-decomposition-agent) -- decomposition strategies, DAG representation
+- [Vellum: Agentic Workflows in 2026](https://vellum.ai/blog/agentic-workflows-emerging-architectures-and-design-patterns) -- state machine patterns, production considerations
+- [arXiv: Orchestration of Multi-Agent Systems](https://arxiv.org/html/2601.13671v1) -- checkpoint/resume, state management
+- Existing codebase: `src/projects/` (heartbeat-scanner, checkpoint, queue-manager, schemas, scaffold, sync-service), `src/agents/acp-spawn.ts`, `src/agents/project-context-hook.ts`, `src/gateway/server-methods/projects.ts`
 
 ---
 
-_Architecture analysis: 2026-03-26_
+_Architecture research for: AI agent workflow orchestration layer_
+_Researched: 2026-03-28_
