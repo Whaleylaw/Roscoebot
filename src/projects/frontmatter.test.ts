@@ -3,6 +3,7 @@ import {
   parseProjectFrontmatter,
   parseQueueFrontmatter,
   parseTaskFrontmatter,
+  parseWorkflowFrontmatter,
 } from "./frontmatter.js";
 
 describe("parseProjectFrontmatter", () => {
@@ -190,5 +191,91 @@ describe("parseQueueFrontmatter", () => {
       return;
     }
     expect(result.data.updated).toBeUndefined();
+  });
+});
+
+describe("parseWorkflowFrontmatter", () => {
+  it("parses valid workflow frontmatter with all fields", () => {
+    const content = [
+      "---",
+      "id: WF-001",
+      "title: Deploy pipeline",
+      "goal: Set up CI/CD",
+      "status: active",
+      "goal_check: CI passes on push",
+      "tasks:",
+      "  - TASK-001",
+      "  - TASK-002",
+      "template: ci-cd",
+      "created: 2026-03-29T00:00:00Z",
+      "updated: 2026-03-29T00:00:00Z",
+      "---",
+      "# Workflow body",
+    ].join("\n");
+    const result = parseWorkflowFrontmatter(content, "wf.md");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.id).toBe("WF-001");
+    expect(result.data.title).toBe("Deploy pipeline");
+    expect(result.data.goal).toBe("Set up CI/CD");
+    expect(result.data.status).toBe("active");
+    expect(result.data.goal_check).toBe("CI passes on push");
+    expect(result.data.tasks).toEqual(["TASK-001", "TASK-002"]);
+    expect(result.data.template).toBe("ci-cd");
+  });
+
+  it("applies defaults for optional fields", () => {
+    const content = "---\nid: WF-001\ntitle: Test\ngoal: Do thing\n---\n";
+    const result = parseWorkflowFrontmatter(content, "wf.md");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.status).toBe("draft");
+    expect(result.data.tasks).toEqual([]);
+    expect(result.data.template).toBeNull();
+    expect(result.data.goal_check).toBeNull();
+  });
+
+  it("returns error when no frontmatter block found", () => {
+    const result = parseWorkflowFrontmatter("no frontmatter here", "bad.md");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.message).toBe("No frontmatter block found");
+  });
+
+  it("returns error for invalid YAML", () => {
+    const result = parseWorkflowFrontmatter(
+      "---\nid: WF-001\n  bad: yaml: here\n---\n",
+      "bad-yaml.md",
+    );
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.message).toContain("YAML parse error");
+  });
+
+  it("returns error for missing required field (no id)", () => {
+    const content = "---\ntitle: Test\ngoal: Do thing\n---\n";
+    const result = parseWorkflowFrontmatter(content, "missing-id.md");
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    expect(result.error.message).toBe("Schema validation failed");
+    expect(result.error.issues.length).toBeGreaterThan(0);
+  });
+
+  it("validates tasks array entries against TASK_ID_PATTERN", () => {
+    const content = [
+      "---",
+      "id: WF-001",
+      "title: Test",
+      "goal: Do thing",
+      "tasks:",
+      "  - TASK-001",
+      "  - TASK-002",
+      "---",
+      "",
+    ].join("\n");
+    const result = parseWorkflowFrontmatter(content, "wf.md");
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.tasks).toEqual(["TASK-001", "TASK-002"]);
   });
 });
