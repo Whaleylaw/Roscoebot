@@ -17,7 +17,7 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Decomposition
 
 - [x] **DEC-01**: Orchestrator can decompose a user goal into a set of executable tasks with dependencies, capabilities, and success criteria
-- [ ] **DEC-02**: Decomposed tasks are low-ambiguity: each includes objective, context, action guidance, success criteria, and verification method
+- [x] **DEC-02**: Decomposed tasks are low-ambiguity: each includes objective, context, action guidance, success criteria, and verification method
 - [x] **DEC-03**: Decomposition is shallow by default (2 levels max) with adaptive decompose-on-failure for deeper breakdown
 - [x] **DEC-04**: Task frontmatter is extended with: workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode
 
@@ -89,11 +89,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Orchestration Agent
 
-- [ ] **ORC-01**: Orchestration agent configured as a persistent agent in agents.list[] with its own workspace, IDENTITY.md, SOUL.md, and AGENTS.md
+- [x] **ORC-01**: Orchestration agent configured as a persistent agent in agents.list[] with its own workspace, IDENTITY.md, SOUL.md, and AGENTS.md
 - [ ] **ORC-02**: Main agent delegates work to orchestrator via sessions_send; orchestrator processes goals and coordinates work asynchronously
 - [ ] **ORC-03**: Orchestrator coordinates work by creating tasks in the project queue; agents pick up tasks via existing heartbeat claiming
-- [ ] **ORC-04**: Orchestrator's AGENTS.md defines its operating instructions: decomposition standards, dispatch policy, verification rules, recovery behavior
-- [ ] **ORC-05**: Planning (decomposition, workflow authoring) separated from dispatch (task assignment, state management) within the orchestrator's instruction set
+- [x] **ORC-04**: Orchestrator's AGENTS.md defines its operating instructions: decomposition standards, dispatch policy, verification rules, recovery behavior
+- [x] **ORC-05**: Planning (decomposition, workflow authoring) separated from dispatch (task assignment, state management) within the orchestrator's instruction set
 
 ## v2 Requirements
 
@@ -142,7 +142,7 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WF-03       | Phase 1 | Complete |
 | WF-04       | Phase 1 | Complete |
 | DEC-01      | Phase 2 | Complete |
-| DEC-02      | Phase 2 | Pending  |
+| DEC-02      | Phase 2 | Complete |
 | DEC-03      | Phase 2 | Complete |
 | DEC-04      | Phase 1 | Complete |
 | QUE-01      | Phase 2 | Complete |
@@ -181,11 +181,11 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CAP-01      | Phase 1 | Complete |
 | CAP-02      | Phase 2 | Complete |
 | CAP-03      | Phase 2 | Complete |
-| ORC-01      | Phase 2 | Pending  |
+| ORC-01      | Phase 2 | Complete |
 | ORC-02      | Phase 2 | Pending  |
 | ORC-03      | Phase 2 | Pending  |
-| ORC-04      | Phase 2 | Pending  |
-| ORC-05      | Phase 2 | Pending  |
+| ORC-04      | Phase 2 | Complete |
+| ORC-05      | Phase 2 | Complete |
 
 **Coverage:**
 
