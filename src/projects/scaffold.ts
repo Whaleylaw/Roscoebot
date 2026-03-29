@@ -17,6 +17,22 @@ export interface CreateSubProjectOpts {
   owner?: string;
 }
 
+/**
+ * Ensure workflows/ directory exists within a project dir.
+ * Creates it with .gitkeep if missing. No-op if already present.
+ * Used by orchestrator (Phase 2) for existing projects that predate workflow support.
+ */
+export async function ensureWorkflowsDir(projectDir: string): Promise<void> {
+  const workflowsDir = path.join(projectDir, "workflows");
+  await fs.mkdir(workflowsDir, { recursive: true });
+  const gitkeep = path.join(workflowsDir, ".gitkeep");
+  try {
+    await fs.access(gitkeep);
+  } catch {
+    await fs.writeFile(gitkeep, "", "utf-8");
+  }
+}
+
 /** Write file atomically via tmp+rename to avoid partial reads. */
 async function writeFileAtomic(filePath: string, content: string): Promise<void> {
   const tmpPath = `${filePath}.${randomUUID()}.tmp`;
@@ -59,6 +75,11 @@ export class ProjectManager {
     await fs.mkdir(tasksDir, { recursive: true });
     await fs.writeFile(path.join(tasksDir, ".gitkeep"), "", "utf-8");
 
+    // Create workflows/ with .gitkeep
+    const workflowsDir = path.join(projectDir, "workflows");
+    await fs.mkdir(workflowsDir, { recursive: true });
+    await fs.writeFile(path.join(workflowsDir, ".gitkeep"), "", "utf-8");
+
     // Generate and write PROJECT.md and queue.md atomically
     await writeFileAtomic(path.join(projectDir, "PROJECT.md"), generateProjectMd(opts));
     await writeFileAtomic(path.join(projectDir, "queue.md"), generateQueueMd());
@@ -100,6 +121,11 @@ export class ProjectManager {
     await fs.mkdir(tasksDir, { recursive: true });
     await fs.writeFile(path.join(tasksDir, ".gitkeep"), "", "utf-8");
 
+    // Create workflows/ with .gitkeep
+    const workflowsDir = path.join(subDir, "workflows");
+    await fs.mkdir(workflowsDir, { recursive: true });
+    await fs.writeFile(path.join(workflowsDir, ".gitkeep"), "", "utf-8");
+
     // Generate and write PROJECT.md and queue.md atomically
     await writeFileAtomic(
       path.join(subDir, "PROJECT.md"),
@@ -139,5 +165,35 @@ export class ProjectManager {
 
     const next = maxId + 1;
     return `TASK-${String(next).padStart(3, "0")}`;
+  }
+
+  /**
+   * Return the next sequential workflow ID for a project directory.
+   * Scans `workflows/` for existing WF-NNN.md files, finds the max, and
+   * returns max+1 with at least 3-digit zero-padding.
+   */
+  async nextWorkflowId(projectDir: string): Promise<string> {
+    const workflowsDir = path.join(projectDir, "workflows");
+    let entries: string[];
+    try {
+      entries = await fs.readdir(workflowsDir);
+    } catch {
+      return "WF-001";
+    }
+
+    const pattern = /^WF-(\d+)\.md$/;
+    let maxId = 0;
+    for (const entry of entries) {
+      const match = pattern.exec(entry);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (num > maxId) {
+          maxId = num;
+        }
+      }
+    }
+
+    const next = maxId + 1;
+    return `WF-${String(next).padStart(3, "0")}`;
   }
 }
