@@ -76,7 +76,15 @@ Plans:
 3. Tasks classified as irreversible or approval_required pause execution and present the planned action and consequences to the user before proceeding
 4. Tasks classified as side_effect_class "none" or "reversible" auto-proceed without human approval
 5. A task is not marked "done" until its verification passes; failed verification keeps the task in a non-complete state
-   **Plans**: TBD
+
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 03-01-PLAN.md -- Schema extensions (success_criteria, review queue section, checkpoint verification, check runners)
+- [ ] 03-02-PLAN.md -- Verification engine and pre-complete hook gate logic
+- [ ] 03-03-PLAN.md -- CLI review approve/reject commands and gateway RPC methods
+- [ ] 03-04-PLAN.md -- Board UI Review column, verification evidence display, approve/reject buttons
 
 ### Phase 4: Recovery & Resumability
 
@@ -125,7 +133,7 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | -------------------------------------------------- | -------------- | ----------- | --------- |
 | 1. Schema & Workflow Foundation                    | 0/3            | Planning    | -         |
 | 2. Orchestrator, Decomposition & Queue Integration | 0/4            | Planning    | -         |
-| 3. Verification & Human-in-the-Loop                | 0/TBD          | Not started | -         |
+| 3. Verification & Human-in-the-Loop                | 0/4            | Planning    | -         |
 | 4. Recovery & Resumability                         | 0/TBD          | Not started | -         |
 | 5. Intake Pipeline & Templates                     | 0/TBD          | Not started | -         |
 | 6. Progress & Observability                        | 0/TBD          | Not started | -         |
