@@ -486,3 +486,33 @@ export function isProjectTaskCompleteEvent(
   if (!context) return false;
   return hasStringContextField(context, "taskId") && hasStringContextField(context, "projectDir");
 }
+
+// ============================================================================
+// Project Task Pre-Complete Hook Events
+// ============================================================================
+
+export type ProjectTaskPreCompleteHookContext = {
+  taskId: string;
+  workflowId: string | null;
+  projectDir: string;
+  agentId: string;
+};
+
+export type ProjectTaskPreCompleteHookEvent = InternalHookEvent & {
+  type: "project";
+  action: "task-pre-complete";
+  context: ProjectTaskPreCompleteHookContext;
+};
+
+export function isProjectTaskPreCompleteEvent(
+  event: InternalHookEvent,
+): event is ProjectTaskPreCompleteHookEvent {
+  if (!isHookEventTypeAndAction(event, "project", "task-pre-complete")) return false;
+  const context = getHookContext<ProjectTaskPreCompleteHookContext>(event);
+  if (!context) return false;
+  return (
+    hasStringContextField(context, "taskId") &&
+    hasStringContextField(context, "projectDir") &&
+    hasStringContextField(context, "agentId")
+  );
+}

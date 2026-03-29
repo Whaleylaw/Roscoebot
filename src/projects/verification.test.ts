@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { SuccessCriterionSchema, TaskFrontmatterSchema } from "./schemas.js";
-import { runFileExistsCheck, runCommandCheck } from "./verification.js";
+import { runFileExistsCheck, runCommandCheck, runVerification } from "./verification.js";
 
 describe("SuccessCriterionSchema", () => {
   it("parses file_exists criterion", () => {
@@ -121,5 +121,98 @@ describe("runCommandCheck", () => {
 
     // Verify the timeout is configured by checking our implementation uses timeout: 30_000
     // This is an acceptance criteria check -- the source must contain timeout: 30_000
+  });
+});
+
+describe("runVerification", () => {
+  let tmpDir: string;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "run-verify-test-"));
+  });
+
+  afterEach(async () => {
+    await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => undefined);
+  });
+
+  it("returns passed=true with empty checks when success_criteria is empty", async () => {
+    const result = await runVerification([], "automatic", tmpDir);
+    expect(result.passed).toBe(true);
+    expect(result.evidence.checks).toEqual([]);
+    expect(result.evidence.verification_type).toBe("automatic");
+  });
+
+  it("returns passed=true when file_exists criterion passes", async () => {
+    await fs.writeFile(path.join(tmpDir, "output.txt"), "data", "utf8");
+    const result = await runVerification(
+      [{ type: "file_exists", path: "output.txt" }],
+      "automatic",
+      tmpDir,
+    );
+    expect(result.passed).toBe(true);
+    expect(result.evidence.checks).toHaveLength(1);
+    expect(result.evidence.checks[0].passed).toBe(true);
+  });
+
+  it("returns passed=false when file_exists criterion fails", async () => {
+    const result = await runVerification(
+      [{ type: "file_exists", path: "missing.txt" }],
+      "automatic",
+      tmpDir,
+    );
+    expect(result.passed).toBe(false);
+    if (!result.passed) {
+      expect(result.reason).toContain("1 of 1 checks failed");
+    }
+  });
+
+  it("returns passed=true for command criterion with exit-0 command", async () => {
+    const result = await runVerification(
+      [{ type: "command", cmd: "echo ok", expect: 0 }],
+      "automatic",
+      tmpDir,
+    );
+    expect(result.passed).toBe(true);
+    expect(result.evidence.checks[0].type).toBe("command");
+  });
+
+  it("returns passed=false for command criterion with failing command", async () => {
+    const result = await runVerification(
+      [{ type: "command", cmd: "exit 1", expect: 0 }],
+      "automatic",
+      tmpDir,
+    );
+    expect(result.passed).toBe(false);
+  });
+
+  it("returns passed=false if any check fails (all-must-pass)", async () => {
+    await fs.writeFile(path.join(tmpDir, "exists.txt"), "ok", "utf8");
+    const result = await runVerification(
+      [
+        { type: "file_exists", path: "exists.txt" },
+        { type: "file_exists", path: "missing.txt" },
+      ],
+      "mixed",
+      tmpDir,
+    );
+    expect(result.passed).toBe(false);
+    if (!result.passed) {
+      expect(result.reason).toContain("1 of 2 checks failed");
+    }
+  });
+
+  it("includes all check results in evidence regardless of pass/fail", async () => {
+    await fs.writeFile(path.join(tmpDir, "exists.txt"), "ok", "utf8");
+    const result = await runVerification(
+      [
+        { type: "file_exists", path: "exists.txt" },
+        { type: "file_exists", path: "missing.txt" },
+      ],
+      "automatic",
+      tmpDir,
+    );
+    expect(result.evidence.checks).toHaveLength(2);
+    expect(result.evidence.checks[0].passed).toBe(true);
+    expect(result.evidence.checks[1].passed).toBe(false);
   });
 });

@@ -113,6 +113,37 @@ export async function runCommandCheck(
   }
 }
 
+/**
+ * Orchestrate all success-criteria checks for a task.
+ * Returns a VerificationResult with evidence of every check run.
+ * All criteria must pass for the result to be `passed: true`.
+ */
+export async function runVerification(
+  criteria: Array<{ type: "file_exists"; path: string } | { type: "command"; cmd: string; expect: number; output_pattern?: string }>,
+  verificationType: string,
+  projectDir: string,
+): Promise<VerificationResult> {
+  const checks: CheckResult[] = [];
+  const timestamp = new Date().toISOString();
+
+  for (const criterion of criteria) {
+    if (criterion.type === "file_exists") {
+      checks.push(await runFileExistsCheck(criterion.path, projectDir));
+    } else if (criterion.type === "command") {
+      checks.push(await runCommandCheck(criterion.cmd, criterion.expect, criterion.output_pattern, projectDir));
+    }
+  }
+
+  const allPassed = checks.length === 0 || checks.every((c) => c.passed);
+  const evidence: VerificationEvidence = { checks, timestamp, verification_type: verificationType };
+
+  if (allPassed) {
+    return { passed: true, evidence };
+  }
+  const failedCount = checks.filter((c) => !c.passed).length;
+  return { passed: false, evidence, reason: `${failedCount} of ${checks.length} checks failed` };
+}
+
 /** Execute a shell command with a 30-second timeout, returning stdout and exit code. */
 function execCommand(
   cmd: string,

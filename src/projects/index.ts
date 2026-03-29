@@ -102,7 +102,7 @@ export { createCheckpoint, readCheckpoint, writeCheckpoint, checkpointPath } fro
 export type { CheckpointData } from "./checkpoint.js";
 
 // Verification (check runners + types)
-export { runFileExistsCheck, runCommandCheck } from "./verification.js";
+export { runFileExistsCheck, runCommandCheck, runVerification } from "./verification.js";
 export type {
   CheckResult,
   VerificationEvidence,
