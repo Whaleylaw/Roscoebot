@@ -1,5 +1,11 @@
-import { describe, it, expect } from "vitest";
-import { validateTaskGraph, type DecomposedTask } from "./orchestrator.js";
+import fs from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { validateTaskGraph, createTaskBatch, type DecomposedTask } from "./orchestrator.js";
+import { generateWorkflowMd, generateQueueMd, generateProjectMd } from "./templates.js";
+import { parseWorkflowFrontmatter } from "./frontmatter.js";
+import { parseQueue } from "./queue-parser.js";
 
 /** Build a minimal DecomposedTask with overrides. */
 function makeTask(overrides: Partial<DecomposedTask> & { id: string }): DecomposedTask {
@@ -149,5 +155,263 @@ describe("validateTaskGraph", () => {
     };
     const result = validateTaskGraph(tasks, ctx);
     expect(result).toEqual({ valid: true });
+  });
+});
+
+describe("createTaskBatch", () => {
+  let tmpDir: string;
+
+  /** Set up a minimal project scaffold in a temp directory. */
+  async function setupProject(): Promise<string> {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "orch-batch-"));
+    const projectDir = tmpDir;
+    await fs.mkdir(path.join(projectDir, "tasks"), { recursive: true });
+    await fs.mkdir(path.join(projectDir, "workflows"), { recursive: true });
+    await fs.writeFile(
+      path.join(projectDir, "PROJECT.md"),
+      generateProjectMd({ name: "test-project" }),
+      "utf-8",
+    );
+    await fs.writeFile(
+      path.join(projectDir, "queue.md"),
+      generateQueueMd(),
+      "utf-8",
+    );
+    return projectDir;
+  }
+
+  /** Create a workflow file and return its ID. */
+  async function createWorkflow(projectDir: string, id: string): Promise<void> {
+    const content = generateWorkflowMd({
+      id,
+      title: "Test Workflow",
+      goal: "Test goal",
+      tasks: [],
+    });
+    await fs.writeFile(
+      path.join(projectDir, "workflows", `${id}.md`),
+      content,
+      "utf-8",
+    );
+  }
+
+  /** Build 3 test DecomposedTask objects. */
+  function makeTestTasks(): DecomposedTask[] {
+    return [
+      makeTask({ id: "batch-1", title: "First task", capabilities: ["code"] }),
+      makeTask({ id: "batch-2", title: "Second task", depends_on: ["batch-1"] }),
+      makeTask({ id: "batch-3", title: "Third task", depends_on: ["batch-2"] }),
+    ];
+  }
+
+  afterEach(async () => {
+    if (tmpDir) {
+      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("creates 3 TASK-NNN.md files in tasks/ directory", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    const result = await createTaskBatch({
+      projectDir,
+      workflowId: "WF-001",
+      tasks: makeTestTasks(),
+    });
+
+    expect(result.taskIds).toHaveLength(3);
+    for (const taskId of result.taskIds) {
+      const taskPath = path.join(projectDir, "tasks", `${taskId}.md`);
+      const exists = await fs.access(taskPath).then(() => true).catch(() => false);
+      expect(exists).toBe(true);
+    }
+  });
+
+  it("adds 3 entries to queue.md Available section", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    const result = await createTaskBatch({
+      projectDir,
+      workflowId: "WF-001",
+      tasks: makeTestTasks(),
+    });
+
+    const queueContent = await fs.readFile(path.join(projectDir, "queue.md"), "utf-8");
+    const parsed = parseQueue(queueContent, "queue.md");
+    expect(parsed.available).toHaveLength(3);
+    for (const taskId of result.taskIds) {
+      expect(parsed.available.some((e) => e.taskId === taskId)).toBe(true);
+    }
+  });
+
+  it("updates workflow frontmatter tasks[] with all 3 task IDs", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    const result = await createTaskBatch({
+      projectDir,
+      workflowId: "WF-001",
+      tasks: makeTestTasks(),
+    });
+
+    const wfContent = await fs.readFile(
+      path.join(projectDir, "workflows", "WF-001.md"),
+      "utf-8",
+    );
+    const wfParsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
+    expect(wfParsed.success).toBe(true);
+    if (wfParsed.success) {
+      for (const taskId of result.taskIds) {
+        expect(wfParsed.data.tasks).toContain(taskId);
+      }
+    }
+  });
+
+  it("task IDs are sequential (TASK-001, TASK-002, TASK-003 in empty project)", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    const result = await createTaskBatch({
+      projectDir,
+      workflowId: "WF-001",
+      tasks: makeTestTasks(),
+    });
+
+    expect(result.taskIds).toEqual(["TASK-001", "TASK-002", "TASK-003"]);
+  });
+
+  it("task file content contains all 5 DEC-02 body sections", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    await createTaskBatch({
+      projectDir,
+      workflowId: "WF-001",
+      tasks: makeTestTasks(),
+    });
+
+    const content = await fs.readFile(
+      path.join(projectDir, "tasks", "TASK-001.md"),
+      "utf-8",
+    );
+    expect(content).toContain("## Objective");
+    expect(content).toContain("## Context");
+    expect(content).toContain("## Action Guidance");
+    expect(content).toContain("## Success Criteria");
+    expect(content).toContain("## Verification");
+  });
+
+  it("if queue addTasks fails, previously created task files are deleted (rollback)", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    // Remove queue.md so addTasks fails when trying to read it
+    await fs.unlink(path.join(projectDir, "queue.md"));
+
+    await expect(
+      createTaskBatch({
+        projectDir,
+        workflowId: "WF-001",
+        tasks: makeTestTasks(),
+      }),
+    ).rejects.toThrow();
+
+    // Verify task files were cleaned up
+    const entries = await fs.readdir(path.join(projectDir, "tasks"));
+    const taskFiles = entries.filter((e) => e.startsWith("TASK-"));
+    expect(taskFiles).toHaveLength(0);
+  });
+
+  it("returns { taskIds, rollback } with correct IDs", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    const result = await createTaskBatch({
+      projectDir,
+      workflowId: "WF-001",
+      tasks: makeTestTasks(),
+    });
+
+    expect(result.taskIds).toBeDefined();
+    expect(result.rollback).toBeTypeOf("function");
+    expect(result.taskIds).toHaveLength(3);
+  });
+
+  it("calling rollback deletes all created task files", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    const result = await createTaskBatch({
+      projectDir,
+      workflowId: "WF-001",
+      tasks: makeTestTasks(),
+    });
+
+    // Verify files exist before rollback
+    for (const taskId of result.taskIds) {
+      const exists = await fs.access(path.join(projectDir, "tasks", `${taskId}.md`)).then(() => true).catch(() => false);
+      expect(exists).toBe(true);
+    }
+
+    await result.rollback();
+
+    // Verify files removed after rollback
+    for (const taskId of result.taskIds) {
+      const exists = await fs.access(path.join(projectDir, "tasks", `${taskId}.md`)).then(() => true).catch(() => false);
+      expect(exists).toBe(false);
+    }
+  });
+
+  it("if updateWorkflowTasks fails after queue entries written, task files are cleaned up (orphan case)", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    // Make workflow file unwritable to trigger updateWorkflowTasks failure
+    const wfPath = path.join(projectDir, "workflows", "WF-001.md");
+    await fs.chmod(wfPath, 0o444);
+
+    await expect(
+      createTaskBatch({
+        projectDir,
+        workflowId: "WF-001",
+        tasks: makeTestTasks(),
+      }),
+    ).rejects.toThrow();
+
+    // Verify task files were cleaned up
+    const entries = await fs.readdir(path.join(projectDir, "tasks"));
+    const taskFiles = entries.filter((e) => e.startsWith("TASK-"));
+    expect(taskFiles).toHaveLength(0);
+
+    // Orphaned queue entries are accepted; heartbeat scanner still finds valid task files via queue entries.
+    // Queue entries may remain because addTasks succeeded before the workflow update failed.
+    // This is documented as accepted behavior since:
+    // (a) the queue entries still reference valid task IDs,
+    // (b) the caller (orchestrateGoal) can re-run updateWorkflowTasks to fix.
+
+    // Restore permissions for cleanup
+    await fs.chmod(wfPath, 0o644);
+  });
+
+  it("remaps batch-local depends_on to real task IDs", async () => {
+    const projectDir = await setupProject();
+    await createWorkflow(projectDir, "WF-001");
+
+    const result = await createTaskBatch({
+      projectDir,
+      workflowId: "WF-001",
+      tasks: makeTestTasks(),
+    });
+
+    // Second task depends on first, third depends on second
+    const task2Content = await fs.readFile(
+      path.join(projectDir, "tasks", "TASK-002.md"),
+      "utf-8",
+    );
+    expect(task2Content).toContain("TASK-001");
+    // Should not contain the batch-local ID
+    expect(task2Content).not.toContain("batch-1");
   });
 });
