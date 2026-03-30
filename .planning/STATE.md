@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 04-01-PLAN.md
-last_updated: "2026-03-30T01:07:02.554Z"
+stopped_at: Completed 04-02-PLAN.md
+last_updated: "2026-03-30T01:17:22.852Z"
 progress:
   total_phases: 6
   completed_phases: 3
   total_plans: 15
-  completed_plans: 12
+  completed_plans: 13
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 04 (recovery-resumability) — EXECUTING
-Plan: 2 of 4
+Plan: 3 of 4
 
 ## Performance Metrics
 
@@ -58,6 +58,7 @@ _Updated after each plan completion_
 | Phase 03 P03 | 6min | 2 tasks | 5 files |
 | Phase 03 P04 | 20min | 3 tasks | 6 files |
 | Phase 04 P01 | 2min | 2 tasks | 4 files |
+| Phase 04 P02 | 8min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -88,6 +89,9 @@ Recent decisions affecting current work:
 - [Phase 03]: Review badge labels follow UI-SPEC mapping (human->Needs Review, external->External Check, mixed->Auto Passed)
 - [Phase 03]: Inline reject confirmation (not modal) to keep approval flow lightweight
 - [Phase 04]: BACKOFF_MS values [5s, 25s, 2m, 10m] match delivery-queue-recovery pattern; MAX_DECOMPOSITION_DEPTH re-exported from recovery-types.ts
+- [Phase 04]: notifyUser injectable stub (NotifyUserFn) with log-only default; wire to sessions_send in Phase 5
+- [Phase 04]: Decompose/reroute v1 stubs move to blocked+notify; require LLM decomposition and gateway agent registry
+- [Phase 04]: failTask hook fires AFTER executeRecoveryStrategy so handlers see updated checkpoint state
 
 ### Pending Todos
 
@@ -100,6 +104,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T01:07:02.551Z
-Stopped at: Completed 04-01-PLAN.md
+Last session: 2026-03-30T01:17:22.847Z
+Stopped at: Completed 04-02-PLAN.md
 Resume file: None
