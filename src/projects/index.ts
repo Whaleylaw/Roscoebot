@@ -79,12 +79,13 @@ export { matchCapabilities } from "./capability-matcher.js";
 export { validateCapabilities, STANDARD_CAPABILITIES } from "./capability-registry.js";
 export type { StandardCapability } from "./capability-registry.js";
 
-// Orchestrator (decomposition validation + batch creation + goal pipeline)
+// Orchestrator (decomposition validation + batch creation + goal pipeline + synthesis)
 export {
   validateTaskGraph,
   createTaskBatch,
   orchestrateGoal,
   parseOrchestratorPayload,
+  synthesizeWorkflow,
 } from "./orchestrator.js";
 export type {
   DecomposedTask,
@@ -95,6 +96,8 @@ export type {
   OrchestrateGoalResult,
   OrchestratorPayload,
   ParsePayloadResult,
+  SynthesizeWorkflowOpts,
+  SynthesizeWorkflowResult,
 } from "./orchestrator.js";
 
 // Checkpoint (interruption/resume support)
@@ -156,6 +159,6 @@ export type { IntakePayload, ParseIntakePayloadResult } from "./intake-payload.j
 // Intake skill (Phase 5)
 export { INTAKE_SKILL_MD, getIntakeSkillContent } from "./intake-skill.js";
 
-// Notify user wiring (Phase 5) -- added by Plan 05-05 when notify-user-wire.ts is created
-// export { createNotifyUserFn } from "./notify-user-wire.js";
-// export type { CreateNotifyUserFnOpts } from "./notify-user-wire.js";
+// Notify user wiring (Phase 5)
+export { createNotifyUserFn } from "./notify-user-wire.js";
+export type { CreateNotifyUserFnOpts } from "./notify-user-wire.js";
