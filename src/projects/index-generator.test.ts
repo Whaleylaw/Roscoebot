@@ -8,10 +8,13 @@ import {
   generateProjectIndex,
   generateQueueIndex,
   generateTaskIndex,
+  generateWorkflowIndex,
+  generateWorkflowSummary,
   writeIndexFile,
 } from "./index-generator.js";
 import type { ParsedQueue } from "./queue-parser.js";
-import type { ProjectFrontmatter, TaskFrontmatter } from "./types.js";
+import type { WorkflowIndex } from "./sync-types.js";
+import type { ProjectFrontmatter, TaskFrontmatter, WorkflowFrontmatter } from "./types.js";
 
 describe("index-generator", () => {
   let tmpDir: string;
@@ -312,6 +315,127 @@ updated: "2026-01-01"
       expect(events).toContainEqual({ type: "reindex:complete", project: "my-project" });
     });
 
+    it("reads workflows/ and writes .index/workflows/ JSON files", async () => {
+      const projectDir = path.join(tmpDir, "wf-project");
+      await fs.mkdir(path.join(projectDir, "tasks"), { recursive: true });
+      await fs.mkdir(path.join(projectDir, "workflows"), { recursive: true });
+
+      await fs.writeFile(
+        path.join(projectDir, "PROJECT.md"),
+        `---
+name: wf-project
+status: active
+tags: []
+columns:
+  - Backlog
+  - Done
+dashboard:
+  widgets:
+    - project-status
+---
+`,
+        "utf-8",
+      );
+
+      await fs.writeFile(
+        path.join(projectDir, "tasks", "TASK-001.md"),
+        `---
+id: TASK-001
+title: First
+status: done
+column: Done
+priority: medium
+capabilities: []
+depends_on: []
+claimed_by: null
+claimed_at: null
+parent: null
+workflow: WF-001
+---
+`,
+        "utf-8",
+      );
+
+      await fs.writeFile(
+        path.join(projectDir, "tasks", "TASK-002.md"),
+        `---
+id: TASK-002
+title: Second
+status: in-progress
+column: Backlog
+priority: medium
+capabilities: []
+depends_on: []
+claimed_by: agent-1
+claimed_at: null
+parent: null
+workflow: WF-001
+---
+`,
+        "utf-8",
+      );
+
+      await fs.writeFile(
+        path.join(projectDir, "workflows", "WF-001.md"),
+        `---
+id: WF-001
+title: Test Workflow
+status: active
+goal: Do stuff
+tasks:
+  - TASK-001
+  - TASK-002
+template: null
+---
+
+# WF-001
+`,
+        "utf-8",
+      );
+
+      await fs.writeFile(
+        path.join(projectDir, "queue.md"),
+        `---
+updated: "2026-01-01"
+---
+
+## Available
+
+## Claimed
+
+## Done
+
+## Blocked
+`,
+        "utf-8",
+      );
+
+      const events = await generateAllIndexes(projectDir);
+
+      // Individual workflow index should exist
+      const wfJson = JSON.parse(
+        await fs.readFile(path.join(projectDir, ".index", "workflows", "WF-001.json"), "utf-8"),
+      );
+      expect(wfJson.id).toBe("WF-001");
+      expect(wfJson.progress.done).toBe(1);
+      expect(wfJson.progress.claimed).toBe(1);
+      expect(wfJson.progress.total).toBe(2);
+
+      // Summary should exist
+      const summaryJson = JSON.parse(
+        await fs.readFile(path.join(projectDir, ".index", "workflows.json"), "utf-8"),
+      );
+      expect(summaryJson.workflows).toHaveLength(1);
+      expect(summaryJson.workflows[0].id).toBe("WF-001");
+
+      // Events should include workflow:changed
+      expect(events).toContainEqual({
+        type: "workflow:changed",
+        project: "wf-project",
+        workflowId: "WF-001",
+      });
+    });
+
     it("skips files with invalid frontmatter and still generates valid indexes", async () => {
       const projectDir = path.join(tmpDir, "partial-project");
       await fs.mkdir(path.join(projectDir, "tasks"), { recursive: true });
@@ -403,6 +527,168 @@ updated: "2026-01-01"
         type: "reindex:complete",
         project: "partial-project",
       });
+    });
+  });
+
+  describe("generateWorkflowIndex", () => {
+    const baseFm: WorkflowFrontmatter = {
+      id: "WF-001",
+      title: "Test Workflow",
+      status: "active",
+      goal: "Complete the goal",
+      goal_check: null,
+      tasks: ["TASK-001", "TASK-002", "TASK-003", "TASK-004", "TASK-005"],
+      template: null,
+    };
+
+    it("computes correct progress counts from task statuses", () => {
+      const statuses = new Map<string, string>([
+        ["TASK-001", "done"],
+        ["TASK-002", "done"],
+        ["TASK-003", "in-progress"],
+        ["TASK-004", "review"],
+        ["TASK-005", "backlog"],
+      ]);
+      const result = generateWorkflowIndex(baseFm, statuses);
+      expect(result.progress.done).toBe(2);
+      expect(result.progress.claimed).toBe(1);
+      expect(result.progress.review).toBe(1);
+      expect(result.progress.available).toBe(1);
+      expect(result.progress.blocked).toBe(0);
+      expect(result.progress.total).toBe(5);
+    });
+
+    it("returns all done when every task is done", () => {
+      const fm: WorkflowFrontmatter = {
+        ...baseFm,
+        tasks: ["TASK-001", "TASK-002"],
+      };
+      const statuses = new Map<string, string>([
+        ["TASK-001", "done"],
+        ["TASK-002", "done"],
+      ]);
+      const result = generateWorkflowIndex(fm, statuses);
+      expect(result.progress.done).toBe(result.progress.total);
+      expect(result.progress.total).toBe(2);
+    });
+
+    it("returns all zeros for empty tasks list", () => {
+      const fm: WorkflowFrontmatter = { ...baseFm, tasks: [] };
+      const statuses = new Map<string, string>();
+      const result = generateWorkflowIndex(fm, statuses);
+      expect(result.progress.total).toBe(0);
+      expect(result.progress.done).toBe(0);
+      expect(result.progress.claimed).toBe(0);
+      expect(result.progress.review).toBe(0);
+      expect(result.progress.blocked).toBe(0);
+      expect(result.progress.available).toBe(0);
+    });
+
+    it("includes frontmatter fields and indexedAt timestamp", () => {
+      const fm: WorkflowFrontmatter = {
+        ...baseFm,
+        template: "coding",
+      };
+      const statuses = new Map<string, string>();
+      const result = generateWorkflowIndex(fm, statuses);
+      expect(result.id).toBe("WF-001");
+      expect(result.title).toBe("Test Workflow");
+      expect(result.status).toBe("active");
+      expect(result.goal).toBe("Complete the goal");
+      expect(result.tasks).toEqual(baseFm.tasks);
+      expect(result.template).toBe("coding");
+      expect(result.indexedAt).toBeDefined();
+      expect(new Date(result.indexedAt).toISOString()).toBe(result.indexedAt);
+    });
+  });
+
+  describe("generateWorkflowSummary", () => {
+    it("produces array of workflow summaries with id, title, status, progress, and indexedAt", () => {
+      const workflows: WorkflowIndex[] = [
+        {
+          id: "WF-001",
+          title: "First",
+          status: "active",
+          goal: "Goal 1",
+          tasks: ["TASK-001"],
+          template: null,
+          progress: { total: 1, done: 0, claimed: 1, review: 0, blocked: 0, available: 0 },
+          indexedAt: new Date().toISOString(),
+        },
+        {
+          id: "WF-002",
+          title: "Second",
+          status: "completed",
+          goal: "Goal 2",
+          tasks: ["TASK-002"],
+          template: null,
+          progress: { total: 1, done: 1, claimed: 0, review: 0, blocked: 0, available: 0 },
+          indexedAt: new Date().toISOString(),
+        },
+      ];
+      const result = generateWorkflowSummary(workflows);
+      expect(result.workflows).toHaveLength(2);
+      expect(result.workflows[0].id).toBe("WF-001");
+      expect(result.workflows[0].title).toBe("First");
+      expect(result.workflows[0].status).toBe("active");
+      expect(result.workflows[0].progress.claimed).toBe(1);
+      expect(result.workflows[1].id).toBe("WF-002");
+      expect(result.workflows[1].progress.done).toBe(1);
+      expect(result.indexedAt).toBeDefined();
+    });
+  });
+
+  describe("generateBoardIndex workflow field", () => {
+    it("populates workflow field from TaskFrontmatter.workflow", () => {
+      const tasks: TaskFrontmatter[] = [
+        {
+          id: "TASK-001",
+          title: "A",
+          status: "backlog",
+          column: "Backlog",
+          priority: "medium",
+          capabilities: [],
+          depends_on: [],
+          claimed_by: null,
+          claimed_at: null,
+          parent: null,
+          workflow: "WF-001",
+          verification_type: "automatic",
+          side_effect_class: "none",
+          approval_required: false,
+          estimated_size: "medium",
+          execution_mode: "auto",
+          success_criteria: [],
+        },
+      ];
+      const result = generateBoardIndex(tasks, ["Backlog"]);
+      expect(result.columns[0].tasks[0].workflow).toBe("WF-001");
+    });
+
+    it("sets workflow to null when task has no workflow", () => {
+      const tasks: TaskFrontmatter[] = [
+        {
+          id: "TASK-002",
+          title: "B",
+          status: "backlog",
+          column: "Backlog",
+          priority: "medium",
+          capabilities: [],
+          depends_on: [],
+          claimed_by: null,
+          claimed_at: null,
+          parent: null,
+          workflow: null,
+          verification_type: "automatic",
+          side_effect_class: "none",
+          approval_required: false,
+          estimated_size: "medium",
+          execution_mode: "auto",
+          success_criteria: [],
+        },
+      ];
+      const result = generateBoardIndex(tasks, ["Backlog"]);
+      expect(result.columns[0].tasks[0].workflow).toBeNull();
     });
   });
 });

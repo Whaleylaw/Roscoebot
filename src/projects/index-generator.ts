@@ -4,6 +4,7 @@ import path from "node:path";
 import { parseProjectFrontmatter, parseTaskFrontmatter } from "./frontmatter.js";
 import { parseQueue } from "./queue-parser.js";
 import type { ParsedQueue } from "./queue-parser.js";
+import { parseWorkflowFrontmatter } from "./frontmatter.js";
 import type {
   BoardIndex,
   BoardTaskEntry,
@@ -11,8 +12,11 @@ import type {
   QueueIndex,
   SyncEvent,
   TaskIndex,
+  WorkflowIndex,
+  WorkflowProgressCounts,
+  WorkflowSummary,
 } from "./sync-types.js";
-import type { ProjectFrontmatter, TaskFrontmatter } from "./types.js";
+import type { ProjectFrontmatter, TaskFrontmatter, WorkflowFrontmatter } from "./types.js";
 
 /**
  * Transform parsed project frontmatter into a JSON-serializable ProjectIndex.
@@ -53,6 +57,7 @@ export function generateBoardIndex(tasks: TaskFrontmatter[], columns: string[]):
       status: task.status,
       priority: task.priority,
       claimed_by: task.claimed_by,
+      workflow: task.workflow ?? null,
     };
     columnMap.get(targetColumn)!.push(entry);
   }
@@ -76,6 +81,78 @@ export function generateQueueIndex(parsed: ParsedQueue): QueueIndex {
     review: parsed.review,
     blocked: parsed.blocked,
     done: parsed.done,
+    indexedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Compute progress counts from a map of task statuses.
+ */
+function computeProgressCounts(taskStatuses: Map<string, string>): WorkflowProgressCounts {
+  let done = 0;
+  let claimed = 0;
+  let review = 0;
+  let blocked = 0;
+  let available = 0;
+
+  for (const status of taskStatuses.values()) {
+    switch (status) {
+      case "done":
+        done++;
+        break;
+      case "in-progress":
+        claimed++;
+        break;
+      case "review":
+        review++;
+        break;
+      case "blocked":
+        blocked++;
+        break;
+      default:
+        available++;
+        break;
+    }
+  }
+
+  return { total: taskStatuses.size, done, claimed, review, blocked, available };
+}
+
+/**
+ * Generate a WorkflowIndex from workflow frontmatter and task statuses.
+ */
+export function generateWorkflowIndex(
+  frontmatter: WorkflowFrontmatter,
+  taskStatuses: Map<string, string>,
+): WorkflowIndex {
+  const progress = computeProgressCounts(taskStatuses);
+  // Use frontmatter.tasks.length for total, not taskStatuses.size,
+  // so total matches the declared task list even if some statuses are missing
+  progress.total = frontmatter.tasks.length;
+
+  return {
+    id: frontmatter.id,
+    title: frontmatter.title,
+    status: frontmatter.status,
+    goal: frontmatter.goal,
+    tasks: frontmatter.tasks,
+    template: frontmatter.template ?? null,
+    progress,
+    indexedAt: new Date().toISOString(),
+  };
+}
+
+/**
+ * Generate a workflow summary from an array of WorkflowIndex objects.
+ */
+export function generateWorkflowSummary(workflows: WorkflowIndex[]): WorkflowSummary {
+  return {
+    workflows: workflows.map((wf) => ({
+      id: wf.id,
+      title: wf.title,
+      status: wf.status,
+      progress: wf.progress,
+    })),
     indexedAt: new Date().toISOString(),
   };
 }
@@ -163,6 +240,55 @@ export async function generateAllIndexes(projectDir: string): Promise<SyncEvent[
     events.push({ type: "queue:changed", project: projectName });
   } catch {
     // queue.md missing or unreadable -- skip
+  }
+
+  // 5. Parse workflows/ and write workflow indexes
+  try {
+    const workflowsDir = path.join(projectDir, "workflows");
+    const workflowFiles = (await fs.readdir(workflowsDir)).filter((f) => /^WF-\d+\.md$/.test(f));
+    const workflowsIndexDir = path.join(indexDir, "workflows");
+    await fs.mkdir(workflowsIndexDir, { recursive: true });
+
+    const allWorkflowIndexes: WorkflowIndex[] = [];
+
+    for (const wfFile of workflowFiles) {
+      try {
+        const wfContent = await fs.readFile(path.join(workflowsDir, wfFile), "utf-8");
+        const wfResult = parseWorkflowFrontmatter(wfContent, wfFile);
+        if (!wfResult.success) continue;
+
+        const wfData = wfResult.data;
+        const taskStatuses = new Map<string, string>();
+        const tasksDir = path.join(projectDir, "tasks");
+
+        for (const taskId of wfData.tasks) {
+          try {
+            const taskContent = await fs.readFile(path.join(tasksDir, `${taskId}.md`), "utf-8");
+            const taskResult = parseTaskFrontmatter(taskContent, `${taskId}.md`);
+            if (taskResult.success) {
+              taskStatuses.set(taskId, taskResult.data.status);
+            } else {
+              taskStatuses.set(taskId, "unknown");
+            }
+          } catch {
+            taskStatuses.set(taskId, "unknown");
+          }
+        }
+
+        const wfIndex = generateWorkflowIndex(wfData, taskStatuses);
+        await writeIndexFile(path.join(workflowsIndexDir, `${wfData.id}.json`), wfIndex);
+        allWorkflowIndexes.push(wfIndex);
+        events.push({ type: "workflow:changed", project: projectName, workflowId: wfData.id });
+      } catch {
+        // Individual workflow unreadable -- skip
+      }
+    }
+
+    // Write summary
+    const summary = generateWorkflowSummary(allWorkflowIndexes);
+    await writeIndexFile(path.join(indexDir, "workflows.json"), summary);
+  } catch {
+    // workflows/ missing -- skip (consistent with tasks/ handling)
   }
 
   events.push({ type: "reindex:complete", project: projectName });

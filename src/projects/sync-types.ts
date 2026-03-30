@@ -10,6 +10,7 @@ export type SyncEvent =
   | { type: "task:changed"; project: string; taskId: string }
   | { type: "task:deleted"; project: string; taskId: string }
   | { type: "queue:changed"; project: string }
+  | { type: "workflow:changed"; project: string; workflowId: string }
   | { type: "reindex:complete"; project: string };
 
 /** JSON shape written to `.index/project.json`. */
@@ -29,6 +30,40 @@ export interface BoardTaskEntry {
   status: string;
   priority: string;
   claimed_by: string | null;
+  workflow?: string | null;
+}
+
+/** Progress counts for a workflow's task statuses. */
+export interface WorkflowProgressCounts {
+  total: number;
+  done: number;
+  claimed: number;
+  review: number;
+  blocked: number;
+  available: number;
+}
+
+/** JSON shape written to `.index/workflows/WF-NNN.json`. */
+export interface WorkflowIndex {
+  id: string;
+  title: string;
+  status: string;
+  goal: string;
+  tasks: string[];
+  template: string | null;
+  progress: WorkflowProgressCounts;
+  indexedAt: string;
+}
+
+/** JSON shape written to `.index/workflows.json`. */
+export interface WorkflowSummary {
+  workflows: Array<{
+    id: string;
+    title: string;
+    status: string;
+    progress: WorkflowProgressCounts;
+  }>;
+  indexedAt: string;
 }
 
 /** JSON shape written to `.index/board.json`. */
