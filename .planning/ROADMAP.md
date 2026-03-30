@@ -97,7 +97,15 @@ Plans:
 2. Anti-loop budget is enforced per task (default 3 retries) and per workflow (token ceiling), and enforcement happens outside the agent context
 3. An interrupted workflow resumes from the last completed task when the orchestrator restarts, not from scratch
 4. Workflow state and task checkpoints persist across sessions so that the orchestrator can reconstruct execution context on resume
-   **Plans**: TBD
+
+**Plans:** 4 plans
+
+Plans:
+
+- [ ] 04-01-PLAN.md -- Recovery types, strategy selection, checkpoint/schema extensions
+- [ ] 04-02-PLAN.md -- Recovery manager, failTask entry point in task-lifecycle
+- [ ] 04-03-PLAN.md -- Heartbeat scanner budget gate and backoff window
+- [ ] 04-04-PLAN.md -- Workflow resume scanner, workflow-status-hook failure handling
 
 ### Phase 5: Intake Pipeline & Templates
 
@@ -134,6 +142,6 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 1. Schema & Workflow Foundation                    | 0/3            | Planning    | -         |
 | 2. Orchestrator, Decomposition & Queue Integration | 0/4            | Planning    | -         |
 | 3. Verification & Human-in-the-Loop                | 0/4            | Planning    | -         |
-| 4. Recovery & Resumability                         | 0/TBD          | Not started | -         |
+| 4. Recovery & Resumability                         | 0/4            | Planning    | -         |
 | 5. Intake Pipeline & Templates                     | 0/TBD          | Not started | -         |
 | 6. Progress & Observability                        | 0/TBD          | Not started | -         |
