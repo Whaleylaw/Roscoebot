@@ -1,7 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { resolveRequiredHomeDir } from "../infra/home-dir.js";
-import { parseProjectFrontmatter, parseTaskFrontmatter } from "../projects/frontmatter.js";
+import {
+  parseProjectFrontmatter,
+  parseTaskFrontmatter,
+  parseWorkflowFrontmatter,
+} from "../projects/frontmatter.js";
 import { parseQueue } from "../projects/queue-parser.js";
 import { ProjectSyncService } from "../projects/sync-service.js";
 import type { OutputRuntimeEnv } from "../runtime.js";
@@ -103,6 +107,84 @@ export async function projectsStatusCommand(
     // queue.md missing
   }
 
+  // Read workflow files for status display
+  type WorkflowStatusEntry = {
+    id: string;
+    title: string;
+    status: string;
+    goal: string;
+    taskList: string[];
+    taskStatuses: Record<string, string>;
+    progress: {
+      total: number;
+      done: number;
+      claimed: number;
+      review: number;
+      blocked: number;
+      available: number;
+    };
+  };
+  const workflows: WorkflowStatusEntry[] = [];
+  const wfDir = path.join(projectDir, "workflows");
+  let hasWorkflowsDir = false;
+
+  try {
+    const wfEntries = await fs.readdir(wfDir);
+    hasWorkflowsDir = true;
+    const wfFiles = wfEntries.filter((f) => /^WF-\d+\.md$/.test(f));
+
+    for (const wfFile of wfFiles) {
+      try {
+        const content = await fs.readFile(path.join(wfDir, wfFile), "utf-8");
+        const result = parseWorkflowFrontmatter(content, wfFile);
+        if (!result.success) continue;
+
+        const wfData = result.data;
+        const taskStatuses: Record<string, string> = {};
+        const progress = { total: 0, done: 0, claimed: 0, review: 0, blocked: 0, available: 0 };
+
+        // Read each task referenced by the workflow
+        for (const taskId of wfData.tasks) {
+          progress.total++;
+          const taskPath = path.join(projectDir, "tasks", `${taskId}.md`);
+          try {
+            const taskContent = await fs.readFile(taskPath, "utf-8");
+            const taskResult = parseTaskFrontmatter(taskContent, taskPath);
+            if (taskResult.success) {
+              const st = taskResult.data.status;
+              taskStatuses[taskId] = st;
+              if (st === "done") progress.done++;
+              else if (st === "in-progress") progress.claimed++;
+              else if (st === "review") progress.review++;
+              else if (st === "blocked") progress.blocked++;
+              else progress.available++;
+            } else {
+              taskStatuses[taskId] = "unknown";
+              progress.available++;
+            }
+          } catch {
+            taskStatuses[taskId] = "unknown";
+            progress.available++;
+          }
+        }
+
+        workflows.push({
+          id: wfData.id,
+          title: wfData.title,
+          status: wfData.status,
+          goal: wfData.goal,
+          taskList: wfData.tasks,
+          taskStatuses,
+          progress,
+        });
+      } catch {
+        // Skip unreadable workflow files
+      }
+    }
+  } catch {
+    // workflows/ directory missing -- skip
+  }
+
   if (opts.json) {
     runtime.writeJson({
       name: projectName,
@@ -110,6 +192,14 @@ export async function projectsStatusCommand(
       description: projectDescription,
       taskCounts,
       activeAgents,
+      workflows: workflows.map((wf) => ({
+        id: wf.id,
+        title: wf.title,
+        status: wf.status,
+        goal: wf.goal,
+        tasks: wf.taskStatuses,
+        progress: wf.progress,
+      })),
     });
     return;
   }
@@ -151,5 +241,36 @@ export async function projectsStatusCommand(
       border: "unicode",
     });
     runtime.log(agentTable);
+  }
+
+  // Workflows table (only show if workflows/ directory has workflow files)
+  if (hasWorkflowsDir && workflows.length > 0) {
+    runtime.log("\nWorkflows:");
+    const activeWfs = workflows.filter(
+      (wf) => wf.status === "active" || wf.status === "paused",
+    );
+    if (activeWfs.length === 0) {
+      runtime.log("No active workflows");
+    } else {
+      const wfRows = activeWfs.map((wf) => ({
+        id: wf.id,
+        title: wf.title,
+        status: wf.status,
+        progress: `${wf.progress.done}/${wf.progress.total}`,
+        blocked: String(wf.progress.blocked),
+      }));
+      const wfTable = renderTable({
+        columns: [
+          { key: "id", header: "Workflow" },
+          { key: "title", header: "Title" },
+          { key: "status", header: "Status" },
+          { key: "progress", header: "Progress" },
+          { key: "blocked", header: "Blocked" },
+        ],
+        rows: wfRows,
+        border: "unicode",
+      });
+      runtime.log(wfTable);
+    }
   }
 }
