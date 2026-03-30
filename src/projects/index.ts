@@ -117,3 +117,45 @@ export type { CompleteTaskOpts, CompleteTaskResult } from "./task-lifecycle.js";
 // Heartbeat scanner (agent task pickup)
 export { scanAndClaimTask } from "./heartbeat-scanner.js";
 export type { ScanAndClaimResult, ScanAndClaimOpts } from "./heartbeat-scanner.js";
+
+// Template schema (Phase 5)
+export {
+  WorkflowTemplateFrontmatterSchema,
+  WorkflowTemplateStepSchema,
+  parseTemplateFrontmatter,
+} from "./template-schema.js";
+export type {
+  WorkflowTemplateFrontmatter,
+  WorkflowTemplateStep,
+  WorkflowTemplateParam,
+} from "./template-schema.js";
+
+// Bundled templates (Phase 5)
+export {
+  BUNDLED_TEMPLATES,
+  getBundledTemplate,
+  listBundledTemplates,
+} from "./template-bundled.js";
+
+// Template resolver (Phase 5)
+export { resolveTemplate, listAllTemplates } from "./template-resolver.js";
+export type { ResolvedTemplate, TemplateSummary } from "./template-resolver.js";
+
+// Template save (Phase 5)
+export { saveAsTemplate } from "./template-save.js";
+export type { SaveAsTemplateOpts, SaveAsTemplateResult } from "./template-save.js";
+
+// Project placement (Phase 5)
+export { readProjectSummaries, formatProjectsForPlacement } from "./placement.js";
+export type { ProjectSummary, PlacementSuggestion } from "./placement.js";
+
+// Intake payload (Phase 5)
+export { parseIntakePayload, buildIntakePayload } from "./intake-payload.js";
+export type { IntakePayload, ParseIntakePayloadResult } from "./intake-payload.js";
+
+// Intake skill (Phase 5)
+export { INTAKE_SKILL_MD, getIntakeSkillContent } from "./intake-skill.js";
+
+// Notify user wiring (Phase 5) -- added by Plan 05-05 when notify-user-wire.ts is created
+// export { createNotifyUserFn } from "./notify-user-wire.js";
+// export type { CreateNotifyUserFnOpts } from "./notify-user-wire.js";
