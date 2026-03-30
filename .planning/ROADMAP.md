@@ -143,7 +143,7 @@ Plans:
 
 Plans:
 
-- [ ] 06-01-PLAN.md -- Workflow index types, generateWorkflowIndex, SyncService watcher, BoardTaskEntry.workflow field
+- [x] 06-01-PLAN.md -- Workflow index types, generateWorkflowIndex, SyncService watcher, BoardTaskEntry.workflow field
 - [x] 06-02-PLAN.md -- Status command workflow section (text table + JSON output)
 - [ ] 06-03-PLAN.md -- Gateway RPC workflow endpoints, WebSocket broadcast, board UI badge
 

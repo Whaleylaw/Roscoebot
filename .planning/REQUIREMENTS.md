@@ -30,8 +30,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Progress and Status
 
-- [ ] **PRG-01**: Workflow progress is visible through existing board/queue/.index surfaces
-- [ ] **PRG-02**: Orchestrator updates workflow file status as tasks complete or fail
+- [x] **PRG-01**: Workflow progress is visible through existing board/queue/.index surfaces
+- [x] **PRG-02**: Orchestrator updates workflow file status as tasks complete or fail
 - [x] **PRG-03**: Users can query workflow status through existing project status commands
 
 ### Verification
@@ -149,8 +149,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | QUE-02      | Phase 2 | Complete |
 | QUE-03      | Phase 2 | Complete |
 | QUE-04      | Phase 2 | Complete |
-| PRG-01      | Phase 6 | Pending  |
-| PRG-02      | Phase 6 | Pending  |
+| PRG-01      | Phase 6 | Complete |
+| PRG-02      | Phase 6 | Complete |
 | PRG-03      | Phase 6 | Complete |
 | VER-01      | Phase 3 | Complete |
 | VER-02      | Phase 3 | Complete |

@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 06-02-PLAN.md
-last_updated: "2026-03-30T14:20:20.544Z"
+stopped_at: Completed 06-01-PLAN.md
+last_updated: "2026-03-30T14:22:00.295Z"
 progress:
   total_phases: 6
   completed_phases: 5
   total_plans: 23
-  completed_plans: 21
+  completed_plans: 22
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 06 (progress-observability) — EXECUTING
-Plan: 2 of 3
+Plan: 3 of 3
 
 ## Performance Metrics
 
@@ -67,6 +67,7 @@ _Updated after each plan completion_
 | Phase 05 P04 | 2min | 2 tasks | 3 files |
 | Phase 05 P05 | 4min | 2 tasks | 4 files |
 | Phase 06 P02 | 3min | 1 tasks | 2 files |
+| Phase 06 P01 | 4min | 2 tasks | 5 files |
 
 ## Accumulated Context
 
@@ -112,6 +113,8 @@ Recent decisions affecting current work:
 - [Phase 05]: synthesizeWorkflow uses deterministic heuristic decomposition (not LLM) for workflow structure; LLM decomposition happens later
 - [Phase 05]: createNotifyUserFn uses factory pattern keeping projects/ decoupled from gateway; sendFn injected at integration time
 - [Phase 06]: Workflow section only renders when WF-NNN.md files exist (not just workflows/ dir), since scaffold always creates it
+- [Phase 06]: Progress total uses frontmatter.tasks.length so total matches declared task list
+- [Phase 06]: Workflow index files at .index/workflows/WF-NNN.json, summary at .index/workflows.json
 
 ### Pending Todos
 
@@ -124,6 +127,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T14:20:20.541Z
-Stopped at: Completed 06-02-PLAN.md
+Last session: 2026-03-30T14:22:00.292Z
+Stopped at: Completed 06-01-PLAN.md
 Resume file: None
