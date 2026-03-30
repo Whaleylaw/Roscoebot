@@ -24,6 +24,8 @@ A user describes a goal in natural language and the system produces structured, 
 - [x] Workflow selection: match requests to known markdown-based workflow templates — Validated in Phase 05: Intake Pipeline & Templates
 - [x] Workflow synthesis: generate tailored workflows from freeform user goals when no template fits — Validated in Phase 05: Intake Pipeline & Templates
 
+- [x] Progress observability: workflow progress data exposed to CLI status command, gateway RPC, and board UI — Validated in Phase 06: Progress & Observability
+
 ### Active
 
 - [ ] Orchestration execution: coordinate task dispatch across workers/subagents, respect dependencies, parallel when safe
@@ -102,4 +104,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-03-29 after Phase 05 completion_
+_Last updated: 2026-03-30 after Phase 06 completion_
