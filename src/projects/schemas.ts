@@ -39,6 +39,8 @@ export const ProjectFrontmatterSchema = z.object({
   created: z.string().optional(),
   updated: z.string().optional(),
   allowed_capabilities: z.array(z.string()).default([]),
+  max_task_retries: z.number().int().min(0).default(3),
+  recovery_token_budget: z.number().int().min(0).nullable().default(null),
 });
 
 export const SuccessCriterionSchema = z.discriminatedUnion("type", [
