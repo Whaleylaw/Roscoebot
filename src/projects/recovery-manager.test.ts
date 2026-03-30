@@ -1,8 +1,8 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { NotifyUserFn, RecoveryContext } from "./recovery-manager.js";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { executeRecoveryStrategy, type NotifyUserFn, type RecoveryContext } from "./recovery-manager.js";
 import { QueueManager } from "./queue-manager.js";
 import { generateProjectMd, generateQueueMd, generateTaskMd } from "./templates.js";
 import { checkpointPath, createCheckpoint, writeCheckpoint, readCheckpoint } from "./checkpoint.js";
@@ -21,12 +21,12 @@ describe("executeRecoveryStrategy", () => {
 
 		// Write PROJECT.md with optional max_task_retries override
 		const projectContent = generateProjectMd({ name: "test-project" });
-		// Inject max_task_retries into frontmatter if specified
 		let finalProjectContent = projectContent;
 		if (opts?.maxTaskRetries !== undefined) {
+			// Replace existing max_task_retries value (default is 3 from schema)
 			finalProjectContent = projectContent.replace(
-				/^---\n/,
-				`---\nmax_task_retries: ${opts.maxTaskRetries}\n`,
+				/max_task_retries: \d+/,
+				`max_task_retries: ${opts.maxTaskRetries}`,
 			);
 		}
 		await fs.writeFile(path.join(projectDir, "PROJECT.md"), finalProjectContent, "utf-8");
@@ -80,7 +80,6 @@ describe("executeRecoveryStrategy", () => {
 	});
 
 	it("retry action increments recovery_attempts, sets last_attempted_at, and moves task to available", async () => {
-		const { executeRecoveryStrategy } = await import("./recovery-manager.js");
 		const { projectDir, taskId, ctx } = await setupProject();
 
 		const result = await executeRecoveryStrategy(ctx);
@@ -104,9 +103,24 @@ describe("executeRecoveryStrategy", () => {
 	});
 
 	it("escalate action moves task to blocked, updates checkpoint, and calls notifyUser", async () => {
-		const { executeRecoveryStrategy } = await import("./recovery-manager.js");
-		// Set max retries to 0 so it skips retry for a permanent failure
-		const { projectDir, taskId, ctx } = await setupProject({ maxTaskRetries: 0 });
+		// Set max retries to 0 and create deep parent chain (depth >= MAX_DECOMPOSITION_DEPTH=2)
+		// so decompose and reroute are also skipped, landing on escalate
+		const { projectDir, taskId, ctx } = await setupProject({
+			maxTaskRetries: 0,
+			taskId: "TASK-003",
+			parentTaskId: "TASK-002",
+		});
+		// Create parent chain: TASK-003 -> TASK-002 -> TASK-001 (depth 2 >= MAX_DECOMPOSITION_DEPTH)
+		const parent2 = generateTaskMd(
+			{ id: "TASK-002", title: "Mid parent", parent: "TASK-001" },
+			{ objective: "", context: "", actionGuidance: "", successCriteria: "", verificationMethod: "" },
+		);
+		await fs.writeFile(path.join(projectDir, "tasks", "TASK-002.md"), parent2, "utf-8");
+		const parent1 = generateTaskMd(
+			{ id: "TASK-001", title: "Root parent", parent: null },
+			{ objective: "", context: "", actionGuidance: "", successCriteria: "", verificationMethod: "" },
+		);
+		await fs.writeFile(path.join(projectDir, "tasks", "TASK-001.md"), parent1, "utf-8");
 
 		const notifyUser = vi.fn<NotifyUserFn>();
 		const result = await executeRecoveryStrategy(
@@ -143,7 +157,6 @@ describe("executeRecoveryStrategy", () => {
 	});
 
 	it("permanent failure category skips retry even with budget remaining", async () => {
-		const { executeRecoveryStrategy } = await import("./recovery-manager.js");
 		const { ctx } = await setupProject({ maxTaskRetries: 5 });
 
 		const notifyUser = vi.fn<NotifyUserFn>();
@@ -152,12 +165,12 @@ describe("executeRecoveryStrategy", () => {
 			{ notifyUser },
 		);
 
-		// Permanent failure should NOT retry -- it should decompose/reroute/escalate
+		// Permanent failure should NOT retry -- it should decompose (depth 0 < 2)
 		expect(result.outcome).not.toBe("retry");
+		expect(result.outcome).toBe("decompose");
 	});
 
 	it("reads max_task_retries from PROJECT.md frontmatter", async () => {
-		const { executeRecoveryStrategy } = await import("./recovery-manager.js");
 		// Set max retries to 1 so second failure escalates
 		const { projectDir, taskId, ctx } = await setupProject({ maxTaskRetries: 1 });
 
@@ -169,15 +182,18 @@ describe("executeRecoveryStrategy", () => {
 		const qm = new QueueManager(projectDir);
 		await qm.claimTask(taskId, "agent-1");
 
-		// Second failure should escalate (1 >= 1)
+		// Verify checkpoint has recovery_attempts=1 from first failure
+		const taskFilePath = path.join(projectDir, "tasks", `${taskId}.md`);
+		const cpAfterFirst = await readCheckpoint(checkpointPath(taskFilePath));
+		expect(cpAfterFirst!.recovery_attempts).toBe(1);
+
+		// Second failure should not retry since we hit budget (1 >= 1)
 		const notifyUser = vi.fn<NotifyUserFn>();
 		const result2 = await executeRecoveryStrategy(ctx, { notifyUser });
-		// Should not be retry since we hit budget
 		expect(result2.outcome).not.toBe("retry");
 	});
 
 	it("reads task frontmatter for decomposition depth (parent chain)", async () => {
-		const { executeRecoveryStrategy } = await import("./recovery-manager.js");
 		// Create a parent task first, then a child task
 		const { projectDir, ctx } = await setupProject({ maxTaskRetries: 0 });
 
@@ -234,25 +250,38 @@ describe("executeRecoveryStrategy", () => {
 	});
 
 	it("notifyUser is called with taskId, failureReason, and failureCategory on escalation", async () => {
-		const { executeRecoveryStrategy } = await import("./recovery-manager.js");
-		const { ctx } = await setupProject({ maxTaskRetries: 0 });
+		// Use deep parent chain so escalate is selected (depth >= MAX_DECOMPOSITION_DEPTH)
+		const { projectDir, ctx } = await setupProject({
+			maxTaskRetries: 0,
+			taskId: "TASK-003",
+			parentTaskId: "TASK-002",
+		});
+		const parent2 = generateTaskMd(
+			{ id: "TASK-002", title: "Mid parent", parent: "TASK-001" },
+			{ objective: "", context: "", actionGuidance: "", successCriteria: "", verificationMethod: "" },
+		);
+		await fs.writeFile(path.join(projectDir, "tasks", "TASK-002.md"), parent2, "utf-8");
+		const parent1 = generateTaskMd(
+			{ id: "TASK-001", title: "Root parent", parent: null },
+			{ objective: "", context: "", actionGuidance: "", successCriteria: "", verificationMethod: "" },
+		);
+		await fs.writeFile(path.join(projectDir, "tasks", "TASK-001.md"), parent1, "utf-8");
 
 		const notifyUser = vi.fn<NotifyUserFn>();
 		await executeRecoveryStrategy(
-			{ ...ctx, failureCategory: "permanent", failureReason: "Out of memory" },
+			{ ...ctx, taskId: "TASK-003", failureCategory: "permanent", failureReason: "Out of memory" },
 			{ notifyUser },
 		);
 
 		expect(notifyUser).toHaveBeenCalledOnce();
 		const call = notifyUser.mock.calls[0][0];
-		expect(call.taskId).toBe("TASK-001");
+		expect(call.taskId).toBe("TASK-003");
 		expect(call.failureReason).toBe("Out of memory");
 		expect(call.failureCategory).toBe("permanent");
 		expect(call.recoveryAttempts).toBe(1);
 	});
 
 	it("decompose and reroute stubs call notifyUser", async () => {
-		const { executeRecoveryStrategy } = await import("./recovery-manager.js");
 		// Create parent at depth 0 with max retries 0 so it tries decompose first
 		const { ctx } = await setupProject({ maxTaskRetries: 0 });
 
