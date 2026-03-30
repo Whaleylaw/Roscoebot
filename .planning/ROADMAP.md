@@ -118,7 +118,7 @@ Plans:
 2. Reusable workflow templates exist as markdown files covering at least three work types (code feature, research report, ops runbook) and the orchestrator matches goals to templates
 3. When no template matches, the orchestrator generates a tailored workflow from the user's natural language goal, writes it to disk as a WF-NNN.md file before execution begins, and the generated workflow follows the same structure as templates
 
-**Plans:** 4 plans
+**Plans:** 5 plans
 
 Plans:
 
@@ -126,6 +126,7 @@ Plans:
 - [ ] 05-02-PLAN.md -- Template resolver and save-as-template (three-tier lookup, saveAsTemplate)
 - [ ] 05-03-PLAN.md -- Project placement and intake payload (formatProjectsForPlacement, IntakePayload)
 - [ ] 05-04-PLAN.md -- Intake skill and barrel exports (INTAKE_SKILL_MD, index.ts wiring)
+- [ ] 05-05-PLAN.md -- Workflow synthesis code path and NotifyUser wiring (synthesizeWorkflow, createNotifyUserFn)
 
 ### Phase 6: Progress & Observability
 
@@ -151,5 +152,5 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 2. Orchestrator, Decomposition & Queue Integration | 0/4            | Planning    | -         |
 | 3. Verification & Human-in-the-Loop                | 0/4            | Planning    | -         |
 | 4. Recovery & Resumability                         | 0/4            | Planning    | -         |
-| 5. Intake Pipeline & Templates                     | 0/4            | Planning    | -         |
+| 5. Intake Pipeline & Templates                     | 0/5            | Planning    | -         |
 | 6. Progress & Observability                        | 0/TBD          | Not started | -         |
