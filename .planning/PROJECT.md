@@ -20,11 +20,12 @@ A user describes a goal in natural language and the system produces structured, 
 - [x] Queue/board state coherence: orchestration updates project/task/queue state natively — Validated in Phase 02: Orchestrator, Decomposition & Queue Integration
 - [x] Orchestration agent type that the main agent can spawn for project/workflow coordination — Validated in Phase 02: Orchestrator, Decomposition & Queue Integration
 
+- [x] Project placement logic: determine existing project vs new project vs sub-project — Validated in Phase 05: Intake Pipeline & Templates
+- [x] Workflow selection: match requests to known markdown-based workflow templates — Validated in Phase 05: Intake Pipeline & Templates
+- [x] Workflow synthesis: generate tailored workflows from freeform user goals when no template fits — Validated in Phase 05: Intake Pipeline & Templates
+
 ### Active
 
-- [ ] Project placement logic: determine existing project vs new project vs sub-project
-- [ ] Workflow selection: match requests to known markdown-based workflow templates
-- [ ] Workflow synthesis: generate tailored workflows from freeform user goals when no template fits
 - [ ] Orchestration execution: coordinate task dispatch across workers/subagents, respect dependencies, parallel when safe
 - [ ] Verification framework: structured verification types (automatic, human, external, mixed) with evidence recording
 - [ ] Recovery policy: retry, decompose further, reroute, block, or escalate with anti-loop budget
@@ -101,4 +102,4 @@ This document evolves at phase transitions and milestone boundaries.
 
 ---
 
-_Last updated: 2026-03-29 after Phase 02 completion_
+_Last updated: 2026-03-29 after Phase 05 completion_
