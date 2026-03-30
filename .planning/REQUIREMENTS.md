@@ -1,196 +1,199 @@
-# Requirements: OpenClaw Project Management System
+# Requirements: GSD-Style Orchestration Layer for Roscoebot
 
-**Defined:** 2026-03-26
-**Core Value:** Agents and humans can seamlessly track, claim, and execute project work through structured markdown files that survive context compaction and agent interruptions.
+**Defined:** 2026-03-28
+**Core Value:** A user describes a goal and the system produces structured, executable, verifiable project work end-to-end
 
 ## v1 Requirements
 
-Requirements for Phase 1 release. Each maps to roadmap phases.
+Requirements for initial release. Each maps to roadmap phases.
 
-### Data Model
+### Workflow Foundation
 
-- [x] **DATA-01**: Project folder structure exists at `~/.openclaw/projects/<name>/` with PROJECT.md, queue.md, and tasks/ directory
-- [x] **DATA-02**: Sub-project folders supported one level deep under a parent project
-- [x] **DATA-03**: PROJECT.md contains YAML frontmatter with name, status, description, owner, tags, columns, dashboard widgets
-- [x] **DATA-04**: Task files in `tasks/TASK-NNN.md` contain YAML frontmatter with title, status, priority, assignee, capabilities, depends_on, created, updated
-- [x] **DATA-05**: Queue.md contains sections (Available, Claimed, Blocked) with task references and metadata
-- [x] **DATA-06**: Task IDs are auto-generated sequential integers per project (TASK-001, TASK-002, etc.)
-- [x] **DATA-07**: Task frontmatter supports `depends_on` field referencing other task IDs
-- [x] **DATA-08**: Kanban column names are configurable per project via PROJECT.md frontmatter with defaults (Backlog, In Progress, Review, Done)
+- [x] **WF-01**: Workflow files (WF-NNN.md) exist as first-class entities within project directories with YAML frontmatter and markdown body
+- [x] **WF-02**: Workflow files have a defined lifecycle: draft, active, paused, completed, failed
+- [x] **WF-03**: Workflow frontmatter includes: id, title, status, goal, created, updated, tasks (list of TASK-IDs), template (optional source template)
+- [x] **WF-04**: Workflow directory (workflows/) is created within project directories alongside tasks/
 
-### Frontmatter Parsing
+### Decomposition
 
-- [x] **PARSE-01**: Typed frontmatter parser at `src/projects/frontmatter.ts` returns arrays, nested objects, and typed values (not flat strings)
-- [x] **PARSE-02**: Zod schemas validate PROJECT.md, task file, and queue.md frontmatter
-- [x] **PARSE-03**: Parse failures use `.safeParse()` -- skip corrupt files, log warning with file path and line number
-- [x] **PARSE-04**: Existing `parseFrontmatterBlock()` in `src/markdown/frontmatter.ts` is not modified
+- [x] **DEC-01**: Orchestrator can decompose a user goal into a set of executable tasks with dependencies, capabilities, and success criteria
+- [x] **DEC-02**: Decomposed tasks are low-ambiguity: each includes objective, context, action guidance, success criteria, and verification method
+- [x] **DEC-03**: Decomposition is shallow by default (2 levels max) with adaptive decompose-on-failure for deeper breakdown
+- [x] **DEC-04**: Task frontmatter is extended with: workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode
 
-### Sync Process
+### Task Creation and Queue Integration
 
-- [x] **SYNC-01**: File watcher (chokidar) monitors `~/.openclaw/projects/` for changes to markdown files
-- [x] **SYNC-02**: Watcher uses `awaitWriteFinish` with stabilityThreshold to prevent reading partial writes
-- [x] **SYNC-03**: Watcher callbacks are debounced (300ms) to batch rapid changes
-- [x] **SYNC-04**: On file change, frontmatter is parsed and `.index/` JSON files are regenerated
-- [x] **SYNC-05**: `.index/` JSON is written atomically (write to temp file, then rename)
-- [x] **SYNC-06**: Full `.index/` regeneration runs on gateway startup to catch any drift
-- [x] **SYNC-07**: `.index/` directory is always deletable and fully regeneratable from markdown
+- [x] **QUE-01**: Orchestrator creates tasks via the existing task system and places them in the project queue
+- [x] **QUE-02**: Tasks are created with correct dependencies, capabilities, and priority so the existing heartbeat scanner can claim them
+- [x] **QUE-03**: Agents pick up tasks from the queue on their heartbeats via existing capability matching, dependency satisfaction, and priority sorting — no orchestrator-to-agent assignment needed
+- [x] **QUE-04**: Task/queue state is updated natively through the existing project system as agents claim and complete work
 
-### Concurrency
+### Progress and Status
 
-- [x] **CONC-01**: File-level `.lock` via `mkdir` (atomic on POSIX) prevents concurrent queue.md writes
-- [x] **CONC-02**: Lock is held only during queue read-modify-write cycle (<100ms)
-- [x] **CONC-03**: Lock file contains PID and timestamp for diagnostics
-- [x] **CONC-04**: Stale locks older than 60 seconds are force-cleared
-- [x] **CONC-05**: Validate after write: re-read queue.md to confirm claim persisted
+- [ ] **PRG-01**: Workflow progress is visible through existing board/queue/.index surfaces
+- [ ] **PRG-02**: Orchestrator updates workflow file status as tasks complete or fail
+- [ ] **PRG-03**: Users can query workflow status through existing project status commands
 
-### Agent Integration
+### Verification
 
-- [x] **AGNT-01**: Agents detect PROJECT.md via cwd-based pickup in post-compaction context (extending existing AGENTS.md flow)
-- [x] **AGNT-02**: Agents receive PROJECT.md context via `agent:bootstrap` channel hook for project-scoped channels
-- [x] **AGNT-03**: Context injection is additive -- existing AGENTS.md loading is not modified
-- [x] **AGNT-04**: Capability tags in agent IDENTITY.md (e.g., `capabilities: [code, git, testing, ui]`) are used for task matching
-- [x] **AGNT-05**: On heartbeat, agents scan queue.md of assigned projects for Available tasks matching their capabilities
-- [x] **AGNT-06**: Agents claim tasks by updating queue.md (moving from Available to Claimed) with lock protection
-- [x] **AGNT-07**: Task files include checkpoint JSON sidecar for interruption/resume across context compactions (D-09: JSON sidecar instead of markdown sections)
-- [x] **AGNT-08**: Agent with an active claimed task skips queue scanning on heartbeat (short-circuit)
-- [x] **AGNT-09**: Task dependencies are checked during claim -- tasks with unfinished `depends_on` are skipped
+- [x] **VER-01**: Each task has a verification_type: automatic, human, external, or mixed
+- [x] **VER-02**: Automatic verification checks defined success criteria (test passes, file exists, command output matches)
+- [x] **VER-03**: Human verification creates a checkpoint that pauses execution until user confirms
+- [x] **VER-04**: Verification evidence is recorded alongside task checkpoint (command output, file diffs, API responses, user confirmation)
+- [x] **VER-05**: A task is not marked "done" until verification passes; failed verification triggers recovery
 
-### Gateway
+### Recovery
 
-- [x] **GATE-01**: ProjectService starts/stops with gateway lifecycle
-- [x] **GATE-02**: WebSocket RPC methods: `projects.list`, `projects.get`, `projects.board.get`, `projects.queue.get`
-- [x] **GATE-03**: WebSocket events: `projects.changed`, `projects.board.changed`, `projects.queue.changed`
-- [x] **GATE-04**: Gateway methods registered in `server-methods-list.ts` following existing patterns
+- [ ] **REC-01**: On task failure, orchestrator can retry the task (same shape, new attempt)
+- [ ] **REC-02**: On task failure, orchestrator can decompose the task further into smaller subtasks
+- [ ] **REC-03**: On task failure, orchestrator can reroute to a different worker type with different capabilities
+- [ ] **REC-04**: On task failure, orchestrator can block the task and escalate to the user
+- [ ] **REC-05**: Anti-loop budget enforced per task (default 3 retries) and per workflow (token ceiling), enforced outside the agent
 
-### UI
+### Resumability
 
-- [x] **UI-01**: "Projects" tab appears in web UI sidebar navigation
-- [x] **UI-02**: Project list view shows all projects with name, status, task counts from `.index/project.json`
-- [x] **UI-03**: Project dashboard with configurable widgets (task summary, recent activity, agent status)
-- [x] **UI-04**: Dashboard widgets are configurable per project via PROJECT.md frontmatter with sensible defaults
-- [x] **UI-05**: Read-only kanban board with configurable columns populated from task frontmatter status
-- [x] **UI-06**: Kanban board shows live agent indicators (pulsing badge, agent name) on claimed tasks
-- [x] **UI-07**: Agent session peek on hover/click shows current task checkpoint and recent log entries
-- [x] **UI-08**: UI updates near-real-time via WebSocket event subscriptions
-- [x] **UI-09**: Sub-project navigation from parent project view
+- [ ] **RSM-01**: Workflow state persists across sessions via workflow file + task checkpoints
+- [ ] **RSM-02**: Interrupted workflows can resume from last completed task, not from scratch
+- [ ] **RSM-03**: Orchestrator reads workflow file and checkpoint state on resume to reconstruct execution context
 
-### CLI
+### Human-in-the-Loop
 
-- [x] **CLI-01**: `openclaw projects create <name>` scaffolds project folder with PROJECT.md, queue.md, tasks/
-- [x] **CLI-02**: `openclaw projects list` shows all projects with status summary
-- [x] **CLI-03**: `openclaw projects status <name>` shows detailed project status including task counts and agent activity
-- [x] **CLI-04**: `openclaw projects reindex` regenerates all `.index/` JSON files and clears stale locks
-- [x] **CLI-05**: `openclaw projects validate` checks all frontmatter for parse errors
+- [x] **HIL-01**: Tasks are classified by side_effect_class: none, reversible, irreversible
+- [x] **HIL-02**: Tasks with side_effect_class "none" or "reversible" auto-proceed without human approval
+- [x] **HIL-03**: Tasks with side_effect_class "irreversible" or approval_required=true pause for human confirmation
+- [x] **HIL-04**: Human checkpoints present the task, its planned action, and potential consequences for informed approval
+
+### Project Placement
+
+- [ ] **PPL-01**: Orchestrator determines whether work belongs in an existing project, a new project, or a sub-project
+- [ ] **PPL-02**: Project placement uses heuristics: keyword/capability match against active projects, scope similarity
+- [ ] **PPL-03**: User can override automatic project placement
+
+### Workflow Templates
+
+- [ ] **TPL-01**: Reusable workflow templates exist as markdown files with parameterized frontmatter
+- [ ] **TPL-02**: Templates cover common work types (code feature, research report, ops runbook)
+- [ ] **TPL-03**: Orchestrator matches user goals to templates and configures them for the specific request
+
+### Workflow Synthesis
+
+- [ ] **SYN-01**: When no template matches, orchestrator generates a tailored workflow from the user's natural language goal
+- [ ] **SYN-02**: Synthesized workflows follow the same structure as templates (frontmatter + tasks + dependencies)
+- [ ] **SYN-03**: Generated workflows are written to disk before execution begins (not ephemeral)
+
+### Capability Model
+
+- [x] **CAP-01**: Tasks have capability tags (code, research, ops, review, deploy, etc.) that are domain-agnostic
+- [x] **CAP-02**: Orchestrator dispatches tasks to workers with matching capabilities
+- [x] **CAP-03**: Capability matching is extensible — new capability types can be added without code changes
+
+### Orchestration Agent
+
+- [x] **ORC-01**: Orchestration agent configured as a persistent agent in agents.list[] with its own workspace, IDENTITY.md, SOUL.md, and AGENTS.md
+- [x] **ORC-02**: Main agent delegates work to orchestrator via sessions_send; orchestrator processes goals and coordinates work asynchronously
+- [x] **ORC-03**: Orchestrator coordinates work by creating tasks in the project queue; agents pick up tasks via existing heartbeat claiming
+- [x] **ORC-04**: Orchestrator's AGENTS.md defines its operating instructions: decomposition standards, dispatch policy, verification rules, recovery behavior
+- [x] **ORC-05**: Planning (decomposition, workflow authoring) separated from dispatch (task assignment, state management) within the orchestrator's instruction set
 
 ## v2 Requirements
 
 Deferred to future release. Tracked but not in current roadmap.
 
-### Workflow Engine
+### Advanced Workflow
 
-- **WF-01**: Workflow state machine engine for multi-step task sequences
-- **WF-02**: Workflow templates for common patterns (feature, bugfix, release)
-- **WF-03**: Orchestration agent creating and managing workflows
+- **AWF-01**: Workflow composition — one workflow can invoke another as a sub-workflow
+- **AWF-02**: Execution mode flexibility — tasks can be auto, manual, or interactive
+- **AWF-03**: Workflow parameterization — templates accept typed parameters that customize task generation
 
-### Advanced UI
+### Advanced Recovery
 
-- **AUI-01**: Drag-and-drop kanban board for manual task reordering
-- **AUI-02**: Inline task editing from kanban cards
-- **AUI-03**: Task creation form in UI
+- **ARC-01**: Adaptive decomposition depth — automatically determine optimal decomposition level based on task complexity
+- **ARC-02**: Worker performance tracking — route tasks to workers with better success rates for similar capability types
+- **ARC-03**: Predictive failure detection — flag tasks likely to fail based on historical patterns
 
-### PM Agent
+### Observability
 
-- **PMA-01**: PM agent detects stale tasks via heartbeat monitoring
-- **PMA-02**: PM agent checks agent session liveness before reassigning
-- **PMA-03**: PM agent messages agent to revive before reclaiming task
-- **PMA-04**: PM agent clears stale locks on heartbeat
-
-### Agent Collaboration
-
-- **COLLAB-01**: Agent-proposed tasks with human approval UI
-- **COLLAB-02**: Agent-to-agent messaging for task handoff
-- **COLLAB-03**: Sub-sub-project support (deeper nesting)
+- **OBS-01**: Workflow execution timeline visualization
+- **OBS-02**: Token usage tracking per workflow/task
+- **OBS-03**: Decomposition quality metrics
 
 ## Out of Scope
 
-Explicitly excluded. Documented to prevent scope creep.
-
-| Feature                                   | Reason                                                                                    |
-| ----------------------------------------- | ----------------------------------------------------------------------------------------- |
-| Database/SQLite for project state         | Markdown is source of truth for agent accessibility; database breaks the core promise     |
-| Sprint management                         | Human ceremony concept that doesn't map to agent workflows                                |
-| External integrations (Jira, Linear sync) | Sync complexity distracts from core value; revisit only if proven demand                  |
-| Real-time collaborative editing           | Projects are single-writer (one agent or human at a time per file)                        |
-| Time tracking / estimates                 | Not relevant to agent-driven development                                                  |
-| Drag-and-drop kanban (Phase 1)            | Prove data model with read-only board before adding interaction complexity                |
-| Sub-sub-projects                          | One level of nesting is sufficient; keeps structure flat and navigable                    |
-| Custom task statuses beyond columns       | Configurable columns already handle this; free-form statuses add complexity without value |
+| Feature                                         | Reason                                                                         |
+| ----------------------------------------------- | ------------------------------------------------------------------------------ |
+| Parallel artifact/state system                  | Orchestration composes with existing project system; no separate state store   |
+| Full durable execution runtime (Temporal-style) | Massive infra complexity; checkpoint-based resumability is sufficient          |
+| Visual workflow builder / DAG editor            | UI complexity explosion; markdown files are the "editor"                       |
+| Unstructured agent-to-agent negotiation         | Agents use sessions_send for coordination; no free-form negotiation or bidding |
+| Deep decomposition chains (>3 levels)           | Research shows deep chains increase failure probability and lose coherence     |
+| Custom DSL for workflow definition              | Markdown + frontmatter is the existing pattern; no new language                |
+| Real-time multi-agent negotiation               | Adds latency and non-determinism; orchestrator assigns directly                |
+| Workflow versioning / branching                 | Workflows are ephemeral coordination artifacts, not source code                |
+| Autonomous production deployment                | Irreversible actions always require human gates                                |
 
 ## Traceability
 
 Which phases cover which requirements. Updated during roadmap creation.
 
-| Requirement | Phase    | Status   |
-| ----------- | -------- | -------- |
-| DATA-01     | Phase 2  | Complete |
-| DATA-02     | Phase 2  | Complete |
-| DATA-03     | Phase 1  | Complete |
-| DATA-04     | Phase 1  | Complete |
-| DATA-05     | Phase 1  | Complete |
-| DATA-06     | Phase 2  | Complete |
-| DATA-07     | Phase 1  | Complete |
-| DATA-08     | Phase 1  | Complete |
-| PARSE-01    | Phase 1  | Complete |
-| PARSE-02    | Phase 1  | Complete |
-| PARSE-03    | Phase 1  | Complete |
-| PARSE-04    | Phase 1  | Complete |
-| SYNC-01     | Phase 3  | Complete |
-| SYNC-02     | Phase 3  | Complete |
-| SYNC-03     | Phase 3  | Complete |
-| SYNC-04     | Phase 3  | Complete |
-| SYNC-05     | Phase 3  | Complete |
-| SYNC-06     | Phase 3  | Complete |
-| SYNC-07     | Phase 3  | Complete |
-| CONC-01     | Phase 4  | Complete |
-| CONC-02     | Phase 4  | Complete |
-| CONC-03     | Phase 4  | Complete |
-| CONC-04     | Phase 4  | Complete |
-| CONC-05     | Phase 4  | Complete |
-| AGNT-01     | Phase 5  | Complete |
-| AGNT-02     | Phase 5  | Complete |
-| AGNT-03     | Phase 5  | Complete |
-| AGNT-04     | Phase 5  | Complete |
-| AGNT-05     | Phase 6  | Complete |
-| AGNT-06     | Phase 6  | Complete |
-| AGNT-07     | Phase 6  | Complete |
-| AGNT-08     | Phase 6  | Complete |
-| AGNT-09     | Phase 6  | Complete |
-| GATE-01     | Phase 7  | Complete |
-| GATE-02     | Phase 7  | Complete |
-| GATE-03     | Phase 7  | Complete |
-| GATE-04     | Phase 7  | Complete |
-| CLI-01      | Phase 8  | Complete |
-| CLI-02      | Phase 8  | Complete |
-| CLI-03      | Phase 8  | Complete |
-| CLI-04      | Phase 8  | Complete |
-| CLI-05      | Phase 8  | Complete |
-| UI-01       | Phase 9  | Complete |
-| UI-02       | Phase 9  | Complete |
-| UI-03       | Phase 9  | Complete |
-| UI-04       | Phase 9  | Complete |
-| UI-05       | Phase 10 | Complete |
-| UI-06       | Phase 10 | Complete |
-| UI-07       | Phase 10 | Complete |
-| UI-08       | Phase 9  | Complete |
-| UI-09       | Phase 9  | Complete |
+| Requirement | Phase   | Status   |
+| ----------- | ------- | -------- |
+| WF-01       | Phase 1 | Complete |
+| WF-02       | Phase 1 | Complete |
+| WF-03       | Phase 1 | Complete |
+| WF-04       | Phase 1 | Complete |
+| DEC-01      | Phase 2 | Complete |
+| DEC-02      | Phase 2 | Complete |
+| DEC-03      | Phase 2 | Complete |
+| DEC-04      | Phase 1 | Complete |
+| QUE-01      | Phase 2 | Complete |
+| QUE-02      | Phase 2 | Complete |
+| QUE-03      | Phase 2 | Complete |
+| QUE-04      | Phase 2 | Complete |
+| PRG-01      | Phase 6 | Pending  |
+| PRG-02      | Phase 6 | Pending  |
+| PRG-03      | Phase 6 | Pending  |
+| VER-01      | Phase 3 | Complete |
+| VER-02      | Phase 3 | Complete |
+| VER-03      | Phase 3 | Complete |
+| VER-04      | Phase 3 | Complete |
+| VER-05      | Phase 3 | Complete |
+| REC-01      | Phase 4 | Pending  |
+| REC-02      | Phase 4 | Pending  |
+| REC-03      | Phase 4 | Pending  |
+| REC-04      | Phase 4 | Pending  |
+| REC-05      | Phase 4 | Pending  |
+| RSM-01      | Phase 4 | Pending  |
+| RSM-02      | Phase 4 | Pending  |
+| RSM-03      | Phase 4 | Pending  |
+| HIL-01      | Phase 3 | Complete |
+| HIL-02      | Phase 3 | Complete |
+| HIL-03      | Phase 3 | Complete |
+| HIL-04      | Phase 3 | Complete |
+| PPL-01      | Phase 5 | Pending  |
+| PPL-02      | Phase 5 | Pending  |
+| PPL-03      | Phase 5 | Pending  |
+| TPL-01      | Phase 5 | Pending  |
+| TPL-02      | Phase 5 | Pending  |
+| TPL-03      | Phase 5 | Pending  |
+| SYN-01      | Phase 5 | Pending  |
+| SYN-02      | Phase 5 | Pending  |
+| SYN-03      | Phase 5 | Pending  |
+| CAP-01      | Phase 1 | Complete |
+| CAP-02      | Phase 2 | Complete |
+| CAP-03      | Phase 2 | Complete |
+| ORC-01      | Phase 2 | Complete |
+| ORC-02      | Phase 2 | Complete |
+| ORC-03      | Phase 2 | Complete |
+| ORC-04      | Phase 2 | Complete |
+| ORC-05      | Phase 2 | Complete |
 
 **Coverage:**
 
-- v1 requirements: 51 total (corrected from stated 49)
-- Mapped to phases: 51
+- v1 requirements: 49 total
+- Mapped to phases: 49
 - Unmapped: 0
 
 ---
 
-_Requirements defined: 2026-03-26_
-_Last updated: 2026-03-26 after roadmap creation_
+_Requirements defined: 2026-03-28_
+_Last updated: 2026-03-28 after roadmap creation_

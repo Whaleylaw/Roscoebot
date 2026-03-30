@@ -1,309 +1,139 @@
-# Roadmap: OpenClaw Project Management System
+# Roadmap: GSD-Style Orchestration Layer for Roscoebot
 
-**Created:** 2026-03-26
-**Granularity:** Fine
-**Total phases:** 10
-**Coverage:** 51/51 v1 requirements mapped (corrected from stated 49 -- actual count: DATA:8 + PARSE:4 + SYNC:7 + CONC:5 + AGNT:9 + GATE:4 + UI:9 + CLI:5)
+## Overview
+
+This roadmap delivers an orchestration intelligence layer that turns natural language goals into structured, executable, verifiable project work. The build order follows component dependencies: schema foundation first, then decomposition (core value), verification and human gates, recovery and resumability, intake pipeline, and finally progress observability. Each phase delivers a coherent, independently verifiable capability that the next phase builds upon.
 
 ## Phases
 
-- [x] **Phase 1: Types & Schemas** - Zod schemas, typed frontmatter parser, data model definitions including task dependencies (completed 2026-03-26)
-- [ ] **Phase 2: File Structure & Scaffolding** - Project folder creation, task ID generation, sub-project support
-- [ ] **Phase 3: Sync Pipeline** - File watcher, .index/ JSON generation, atomic writes, startup reindex
-- [ ] **Phase 4: Concurrency** - mkdir-based file locking for queue write safety
-- [ ] **Phase 5: Context Injection** - PROJECT.md cwd pickup, bootstrap hook, capability tags
-- [x] **Phase 6: Queue & Heartbeat** - Agent task claiming, checkpoint/resume, dependency resolution (completed 2026-03-27)
-- [x] **Phase 7: Gateway Service** - ProjectService lifecycle, WebSocket RPC methods, event broadcasting (completed 2026-03-28)
-- [x] **Phase 8: CLI Commands** - create, list, status, reindex, validate commands (completed 2026-03-28)
-- [x] **Phase 9: Project Views & Dashboard** - Sidebar tab, project list, dashboard widgets, WebSocket live updates, sub-project nav (completed 2026-03-28)
-- [x] **Phase 10: Kanban Board & Agent Indicators** - Read-only kanban with live agent badges and session peek (completed 2026-03-28)
+**Phase Numbering:**
+
+- Integer phases (1, 2, 3): Planned milestone work
+- Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
+
+Decimal phases appear between their surrounding integers in numeric order.
+
+- [ ] **Phase 1: Schema & Workflow Foundation** - Workflow file format, extended task frontmatter, and directory structure
+- [ ] **Phase 2: Orchestrator, Decomposition & Queue Integration** - Orchestrator agent setup, goal-to-task decomposition, dependency-aware queue placement
+- [x] **Phase 3: Verification & Human-in-the-Loop** - Structured verification per task, side-effect classification, human approval gates
+- [ ] **Phase 4: Recovery & Resumability** - Retry/decompose/reroute/escalate on failure, anti-loop budgets, cross-session resume
+- [ ] **Phase 5: Intake Pipeline & Templates** - Project placement, workflow templates, workflow synthesis from natural language
+- [ ] **Phase 6: Progress & Observability** - Workflow progress through existing board/queue surfaces, status querying
 
 ## Phase Details
 
-### Phase 1: Types & Schemas
+### Phase 1: Schema & Workflow Foundation
 
-**Goal**: All project data has typed, validated representations that downstream code can rely on
-**Depends on**: Nothing (foundation)
-**Requirements**: PARSE-01, PARSE-02, PARSE-03, PARSE-04, DATA-03, DATA-04, DATA-05, DATA-07, DATA-08
+**Goal**: Workflow files and extended task frontmatter exist as validated, first-class entities in the project directory structure
+**Depends on**: Nothing (first phase)
+**Requirements**: WF-01, WF-02, WF-03, WF-04, DEC-04, CAP-01
 **Success Criteria** (what must be TRUE):
 
-1. A PROJECT.md with valid YAML frontmatter (name, status, description, owner, tags, columns, dashboard widgets) can be parsed into a typed object and validated without error
-2. A task file with valid YAML frontmatter (title, status, priority, assignee, capabilities, depends_on, created, updated) can be parsed into a typed object and validated without error
-3. A queue.md with Available/Claimed/Blocked sections can be parsed into a typed object and validated without error
-4. Malformed frontmatter produces a structured warning with file path and line number instead of crashing
-5. The existing `parseFrontmatterBlock()` in `src/markdown/frontmatter.ts` remains unmodified
-   **Plans:** 3/3 plans complete
-   Plans:
+1. A workflows/ directory can be created inside any project directory and a WF-NNN.md file with valid YAML frontmatter can be written, read, and validated by the system
+2. Workflow files transition through lifecycle states (draft, active, paused, completed, failed) and state changes persist correctly in frontmatter
+3. Task frontmatter accepts the new orchestration fields (workflow, verification_type, side_effect_class, approval_required, estimated_size, execution_mode) without breaking existing task consumers
+4. Tasks can declare domain-agnostic capability tags (code, research, ops, review, deploy) in frontmatter and these are preserved through create/read cycles
 
-- [x] 01-01-PLAN.md — Zod schemas, TypeScript types, and error types
-- [x] 01-02-PLAN.md — Typed frontmatter parser (YAML extraction + Zod validation)
-- [x] 01-03-PLAN.md — Queue.md section parser and public API barrel
-      **Estimated complexity**: M
+**Plans:** 3 plans
 
-### Phase 2: File Structure & Scaffolding
+Plans:
 
-**Goal**: Projects can be created on disk with the correct folder structure and auto-generated task IDs
+- [x] 01-01-PLAN.md -- Schemas, types, and parser (WorkflowFrontmatterSchema, extended Task/Project schemas, parseWorkflowFrontmatter)
+- [ ] 01-02-PLAN.md -- Templates, scaffold, and exports (generateWorkflowMd, nextWorkflowId, workflows/ dir, barrel exports)
+- [x] 01-03-PLAN.md -- Capability registry (validateCapabilities, STANDARD_CAPABILITIES)
+
+### Phase 2: Orchestrator, Decomposition & Queue Integration
+
+**Goal**: An orchestrator agent receives a user goal and produces executable tasks with dependencies in the project queue, ready for agents to claim on heartbeat
 **Depends on**: Phase 1
-**Requirements**: DATA-01, DATA-02, DATA-06
+**Requirements**: DEC-01, DEC-02, DEC-03, QUE-01, QUE-02, QUE-03, QUE-04, CAP-02, CAP-03, ORC-01, ORC-02, ORC-03, ORC-04, ORC-05
 **Success Criteria** (what must be TRUE):
 
-1. A new project at `~/.openclaw/projects/<name>/` contains PROJECT.md, queue.md, and a tasks/ directory
-2. Sub-project folders can be created one level deep under a parent project with the same internal structure
-3. Creating a new task file auto-assigns a sequential ID (TASK-001, TASK-002, etc.) unique within its project
-   **Plans:** 1/2 plans executed
-   Plans:
+1. A configured orchestration agent exists in agents.list[] with its own workspace, IDENTITY.md, SOUL.md, and AGENTS.md defining its operating instructions
+2. The main agent can send a natural language goal to the orchestrator via sessions_send and the orchestrator produces a set of TASK-NNN.md files with objectives, context, action guidance, success criteria, and verification methods
+3. Decomposed tasks appear in the project queue with correct dependencies, capabilities, and priority so that agents claim them on heartbeat without orchestrator-to-agent assignment
+4. Task and queue state updates natively through the existing project system as agents claim and complete work
+5. Capability matching routes tasks to agents with matching capability tags and new capability types can be added without code changes
 
-- [x] 02-01-PLAN.md — Template generation and ProjectManager with create() method
-- [x] 02-02-PLAN.md — Sub-project creation and sequential task ID generation
-      **Estimated complexity**: S
+**Plans:** 4 plans
 
-### Phase 3: Sync Pipeline
+Plans:
 
-**Goal**: Changes to project markdown files are automatically detected and reflected in .index/ JSON
-**Depends on**: Phase 1
-**Requirements**: SYNC-01, SYNC-02, SYNC-03, SYNC-04, SYNC-05, SYNC-06, SYNC-07
+- [x] 02-01-PLAN.md -- Agent schema extension, generateTaskMd, orchestrator workspace templates
+- [x] 02-02-PLAN.md -- QueueManager.addTasks batch method, validateTaskGraph, DecomposedTask type
+- [x] 02-03-PLAN.md -- Atomic batch task creation pipeline (createTaskBatch)
+- [ ] 02-04-PLAN.md -- Workflow status hook, orchestrateGoal pipeline function
+
+### Phase 3: Verification & Human-in-the-Loop
+
+**Goal**: Every completed task is verified before being marked done, with human approval gates for irreversible actions
+**Depends on**: Phase 2
+**Requirements**: VER-01, VER-02, VER-03, VER-04, VER-05, HIL-01, HIL-02, HIL-03, HIL-04
 **Success Criteria** (what must be TRUE):
 
-1. Saving a change to any markdown file under `~/.openclaw/projects/` triggers .index/ JSON regeneration within ~500ms
-2. Rapidly saving multiple files in sequence produces a single batched .index/ update (debounce works)
-3. Partial file writes (slow save, large file) do not produce corrupt .index/ JSON
-4. Deleting the entire .index/ directory and restarting the gateway regenerates all JSON from markdown with no data loss
-5. .index/ JSON files are never in a half-written state (atomic write-then-rename)
-   **Plans:** 2 plans
-   Plans:
+1. Each task has a verification_type (automatic, human, external, mixed) and appropriate verification runs when the task reports completion
+2. Automatic verification checks success criteria (test passes, file exists, command output matches) and records evidence in the task checkpoint
+3. Tasks classified as irreversible or approval_required pause execution and present the planned action and consequences to the user before proceeding
+4. Tasks classified as side_effect_class "none" or "reversible" auto-proceed without human approval
+5. A task is not marked "done" until its verification passes; failed verification keeps the task in a non-complete state
 
-- [x] 03-01-PLAN.md — Sync event types, index shape types, and pure index generation functions
-- [x] 03-02-PLAN.md — ProjectSyncService with chokidar watcher, debounce, lifecycle, and barrel exports
-      **Estimated complexity**: M
+**Plans:** 4 plans
 
-### Phase 4: Concurrency
+Plans:
 
-**Goal**: Multiple agents can safely attempt queue.md writes without corrupting data
-**Depends on**: Phase 1
-**Requirements**: CONC-01, CONC-02, CONC-03, CONC-04, CONC-05
+- [x] 03-01-PLAN.md -- Schema extensions (success_criteria, review queue section, checkpoint verification, check runners)
+- [x] 03-02-PLAN.md -- Verification engine and pre-complete hook gate logic
+- [x] 03-03-PLAN.md -- CLI review approve/reject commands and gateway RPC methods
+- [x] 03-04-PLAN.md -- Board UI Review column, verification evidence display, approve/reject buttons
+
+### Phase 4: Recovery & Resumability
+
+**Goal**: The system recovers gracefully from task failures and resumes interrupted workflows from where they left off
+**Depends on**: Phase 3
+**Requirements**: REC-01, REC-02, REC-03, REC-04, REC-05, RSM-01, RSM-02, RSM-03
 **Success Criteria** (what must be TRUE):
 
-1. Two agents attempting to claim tasks simultaneously do not corrupt queue.md (one succeeds, one retries)
-2. Lock is held for less than 100ms during the read-modify-write cycle
-3. A lock file left behind by a crashed process is automatically cleared after 60 seconds
-4. Lock files contain PID and timestamp readable for diagnostics
-5. After a queue write, re-reading queue.md confirms the expected state persisted
-   **Plans:** 2 plans
-   Plans:
-
-- [x] 04-01-PLAN.md — QueueManager class with lock-protected read-modify-write and serialization (TDD)
-- [ ] 04-02-PLAN.md — Concurrent access tests and barrel exports
-      **Estimated complexity**: M
-
-### Phase 5: Context Injection
-
-**Goal**: Agents automatically receive project context and can be matched to tasks by capability
-**Depends on**: Phase 1
-**Requirements**: AGNT-01, AGNT-02, AGNT-03, AGNT-04
-**Success Criteria** (what must be TRUE):
-
-1. An agent working in a directory containing PROJECT.md receives project context in its post-compaction context
-2. An agent on a project-scoped channel receives PROJECT.md context via the bootstrap hook
-3. Existing AGENTS.md loading continues to work exactly as before (additive change only)
-4. An agent with `capabilities: [code, testing]` in its IDENTITY.md can be matched against task capability requirements
-   **Plans:** 1/2 plans executed
-   Plans:
-
-- [x] 05-01-PLAN.md — Capability matcher and IDENTITY.md capabilities parsing (TDD)
-- [ ] 05-02-PLAN.md — CWD-based PROJECT.md walk-up and bootstrap hook injection
-      **Estimated complexity**: M
-
-### Phase 6: Queue & Heartbeat
-
-**Goal**: Agents autonomously discover, claim, and work on tasks with interruption resilience
-**Depends on**: Phase 4, Phase 5
-**Requirements**: AGNT-05, AGNT-06, AGNT-07, AGNT-08, AGNT-09
-**Success Criteria** (what must be TRUE):
-
-1. On heartbeat, an idle agent scans queue.md and claims an Available task matching its capabilities
-2. An agent with an active claimed task skips queue scanning on subsequent heartbeats
-3. A task with `depends_on: [TASK-003]` is not claimable until TASK-003 reaches Done status
-4. After context compaction, an agent can resume work on a claimed task using checkpoint and log sections in the task file
-5. Task claiming updates queue.md (moves task from Available to Claimed) with lock protection
-   **Plans:** 3/3 plans complete
-   Plans:
-
-- [x] 06-01-PLAN.md — Checkpoint JSON sidecar module with CheckpointData type and CRUD functions (TDD)
-- [x] 06-02-PLAN.md — HeartbeatScanner with scanAndClaimTask: queue scan, claim, resume, deps, priority (TDD)
-- [x] 06-03-PLAN.md — Wire scanner into heartbeat runner, barrel exports, integration test
-      **Estimated complexity**: L
-
-### Phase 7: Gateway Service
-
-**Goal**: Project data is accessible over WebSocket so the UI and external tools can read project state in real time
-**Depends on**: Phase 2, Phase 3
-**Requirements**: GATE-01, GATE-02, GATE-03, GATE-04
-**Success Criteria** (what must be TRUE):
-
-1. ProjectService starts when the gateway starts and stops when it stops
-2. A WebSocket client can call `projects.list`, `projects.get`, `projects.board.get`, `projects.queue.get` and receive typed responses
-3. When a project file changes on disk, connected WebSocket clients receive `projects.changed` (or `.board.changed` / `.queue.changed`) events
-4. All project methods and events are registered in `server-methods-list.ts` following existing gateway patterns
-   **Plans:** 1/2 plans executed
-   Plans:
-
-- [x] 07-01-PLAN.md — ProjectGatewayService class and RPC handler module with unit tests
-- [x] 07-02-PLAN.md — Wire service and handlers into gateway lifecycle, method registry, and scopes
-      **Estimated complexity**: M
-
-### Phase 8: CLI Commands
-
-**Goal**: Users can create, inspect, and maintain projects from the terminal without touching the web UI
-**Depends on**: Phase 2, Phase 3, Phase 4
-**Requirements**: CLI-01, CLI-02, CLI-03, CLI-04, CLI-05
-**Success Criteria** (what must be TRUE):
-
-1. `openclaw projects create myproject` creates a valid project folder on disk with PROJECT.md, queue.md, and tasks/
-2. `openclaw projects list` displays all projects with status summaries
-3. `openclaw projects status myproject` shows task counts by status and active agent activity
-4. `openclaw projects reindex` regenerates all .index/ JSON and clears stale locks
-5. `openclaw projects validate` reports frontmatter parse errors across all project files
-   **Plans:** 2/2 plans complete
-   Plans:
-
-- [x] 08-01-PLAN.md — Create and list commands with route registration for all 5 subcommands
-- [x] 08-02-PLAN.md — Status, reindex, and validate commands
-      **Estimated complexity**: M
-
-### Phase 9: Project Views & Dashboard
-
-**Goal**: Users can browse projects, see task summaries, and monitor agent activity from the web UI sidebar
-**Depends on**: Phase 7
-**Requirements**: UI-01, UI-02, UI-03, UI-04, UI-08, UI-09
-**Success Criteria** (what must be TRUE):
-
-1. A "Projects" tab appears in the web UI sidebar navigation alongside existing tabs
-2. The project list view shows all projects with name, status, and task count summaries
-3. Each project has a dashboard view showing task summary, recent activity, and agent status widgets
-4. Dashboard widget configuration in PROJECT.md frontmatter is respected, with sensible defaults when unconfigured
-5. UI updates reflect file changes within seconds via WebSocket subscriptions -- no manual refresh needed
-6. Sub-projects are navigable from the parent project view
+1. On task failure, the orchestrator selects an appropriate recovery strategy: retry, decompose further, reroute to different capability, or escalate to user
+2. Anti-loop budget is enforced per task (default 3 retries) and per workflow (token ceiling), and enforcement happens outside the agent context
+3. An interrupted workflow resumes from the last completed task when the orchestrator restarts, not from scratch
+4. Workflow state and task checkpoints persist across sessions so that the orchestrator can reconstruct execution context on resume
    **Plans**: TBD
-   **UI hint**: yes
-   **Estimated complexity**: L
 
-### Phase 10: Kanban Board & Agent Indicators
+### Phase 5: Intake Pipeline & Templates
 
-**Goal**: Users can see task status as a kanban board with live agent presence, making the system feel like a real-time mission control
-**Depends on**: Phase 7, Phase 9
-**Requirements**: UI-05, UI-06, UI-07
+**Goal**: Users describe goals in natural language and the system places work in the right project, selects or generates an appropriate workflow, and kicks off orchestration
+**Depends on**: Phase 4
+**Requirements**: PPL-01, PPL-02, PPL-03, TPL-01, TPL-02, TPL-03, SYN-01, SYN-02, SYN-03
 **Success Criteria** (what must be TRUE):
 
-1. A read-only kanban board displays tasks in configurable columns populated from task frontmatter status
-2. Kanban columns match the project's configured column names (or defaults: Backlog, In Progress, Review, Done)
-3. Tasks claimed by an agent show a pulsing badge with the agent name
-4. Hovering or clicking an agent indicator shows the current task checkpoint and recent log entries
-   **Plans:** 2/2 plans complete
-   Plans:
+1. The orchestrator determines whether a goal belongs in an existing project, a new project, or a sub-project, and the user can override that placement
+2. Reusable workflow templates exist as markdown files covering at least three work types (code feature, research report, ops runbook) and the orchestrator matches goals to templates
+3. When no template matches, the orchestrator generates a tailored workflow from the user's natural language goal, writes it to disk as a WF-NNN.md file before execution begins, and the generated workflow follows the same structure as templates
+   **Plans**: TBD
 
-- [x] 10-01-PLAN.md — Gateway extensions, state fields, CSS, URL routing
-- [x] 10-02-PLAN.md — Kanban board view, tab bar, session peek panels
-      **Estimated complexity**: M
+### Phase 6: Progress & Observability
 
-## Dependency Graph
+**Goal**: Users can see workflow progress and status through existing board/queue surfaces and status commands
+**Depends on**: Phase 2
+**Requirements**: PRG-01, PRG-02, PRG-03
+**Success Criteria** (what must be TRUE):
 
-```
-Phase 1 (Types & Schemas)
-  |
-  +---> Phase 2 (File Structure) --+---> Phase 7 (Gateway Service) --+--> Phase 9 (Project Views) --> Phase 10 (Kanban)
-  |                                |                                 |
-  +---> Phase 3 (Sync Pipeline) ---+---> Phase 8 (CLI Commands)      |
-  |                                |                                 |
-  +---> Phase 4 (Concurrency) -----+---> Phase 6 (Queue & Heartbeat) |
-  |                                |                                 |
-  +---> Phase 5 (Context Injection) +                                |
-```
-
-**Parallelizable sets after Phase 1:**
-
-- Phases 2, 3, 4, 5 can all proceed in parallel (independent concerns)
-- Phase 6 needs Phases 4 + 5
-- Phase 7 needs Phases 2 + 3
-- Phase 8 needs Phases 2 + 3 + 4
-- Phases 7 and 8 can proceed in parallel with Phase 6
-- Phase 10 needs Phase 9
-
-**Critical path to UI:** Phase 1 -> Phase 3 -> Phase 7 -> Phase 9 -> Phase 10
-
-## Coverage
-
-| Requirement | Phase    | Category            |
-| ----------- | -------- | ------------------- |
-| DATA-01     | Phase 2  | Data Model          |
-| DATA-02     | Phase 2  | Data Model          |
-| DATA-03     | Phase 1  | Data Model          |
-| DATA-04     | Phase 1  | Data Model          |
-| DATA-05     | Phase 1  | Data Model          |
-| DATA-06     | Phase 2  | Data Model          |
-| DATA-07     | Phase 1  | Data Model          |
-| DATA-08     | Phase 1  | Data Model          |
-| PARSE-01    | Phase 1  | Frontmatter Parsing |
-| PARSE-02    | Phase 1  | Frontmatter Parsing |
-| PARSE-03    | Phase 1  | Frontmatter Parsing |
-| PARSE-04    | Phase 1  | Frontmatter Parsing |
-| SYNC-01     | Phase 3  | Sync Process        |
-| SYNC-02     | Phase 3  | Sync Process        |
-| SYNC-03     | Phase 3  | Sync Process        |
-| SYNC-04     | Phase 3  | Sync Process        |
-| SYNC-05     | Phase 3  | Sync Process        |
-| SYNC-06     | Phase 3  | Sync Process        |
-| SYNC-07     | Phase 3  | Sync Process        |
-| CONC-01     | Phase 4  | Concurrency         |
-| CONC-02     | Phase 4  | Concurrency         |
-| CONC-03     | Phase 4  | Concurrency         |
-| CONC-04     | Phase 4  | Concurrency         |
-| CONC-05     | Phase 4  | Concurrency         |
-| AGNT-01     | Phase 5  | Agent Integration   |
-| AGNT-02     | Phase 5  | Agent Integration   |
-| AGNT-03     | Phase 5  | Agent Integration   |
-| AGNT-04     | Phase 5  | Agent Integration   |
-| AGNT-05     | Phase 6  | Agent Integration   |
-| AGNT-06     | Phase 6  | Agent Integration   |
-| AGNT-07     | Phase 6  | Agent Integration   |
-| AGNT-08     | Phase 6  | Agent Integration   |
-| AGNT-09     | Phase 6  | Agent Integration   |
-| GATE-01     | Phase 7  | Gateway             |
-| GATE-02     | Phase 7  | Gateway             |
-| GATE-03     | Phase 7  | Gateway             |
-| GATE-04     | Phase 7  | Gateway             |
-| CLI-01      | Phase 8  | CLI                 |
-| CLI-02      | Phase 8  | CLI                 |
-| CLI-03      | Phase 8  | CLI                 |
-| CLI-04      | Phase 8  | CLI                 |
-| CLI-05      | Phase 8  | CLI                 |
-| UI-01       | Phase 9  | UI                  |
-| UI-02       | Phase 9  | UI                  |
-| UI-03       | Phase 9  | UI                  |
-| UI-04       | Phase 9  | UI                  |
-| UI-05       | Phase 10 | UI                  |
-| UI-06       | Phase 10 | UI                  |
-| UI-07       | Phase 10 | UI                  |
-| UI-08       | Phase 9  | UI                  |
-| UI-09       | Phase 9  | UI                  |
-
-**Coverage: 51/51 requirements mapped. No orphans.**
+1. Workflow progress is visible through existing board/queue/.index surfaces without requiring new UI
+2. The orchestrator updates workflow file status as constituent tasks complete or fail
+3. Users can query workflow status through existing project status commands and see task completion, blockers, and overall progress
+   **Plans**: TBD
 
 ## Progress
 
-| Phase                               | Plans Complete | Status      | Completed  |
-| ----------------------------------- | -------------- | ----------- | ---------- |
-| 1. Types & Schemas                  | 3/3            | Complete    | 2026-03-26 |
-| 2. File Structure & Scaffolding     | 2/2            | Complete    |            |
-| 3. Sync Pipeline                    | 2/2            | Complete    | -          |
-| 4. Concurrency                      | 0/2            | Planned     | -          |
-| 5. Context Injection                | 1/2            | In Progress |            |
-| 6. Queue & Heartbeat                | 3/3            | Complete    | 2026-03-27 |
-| 7. Gateway Service                  | 2/2            | Complete    | 2026-03-28 |
-| 8. CLI Commands                     | 2/2 | Complete   | 2026-03-28 |
-| 9. Project Views & Dashboard        | 2/2 | Complete   | 2026-03-28 |
-| 10. Kanban Board & Agent Indicators | 1/2 | In Progress|  |
+**Execution Order:**
+Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
+(Phase 6 depends on Phase 2, not Phase 5, so it could theoretically run after Phase 2, but sequencing after Phase 5 keeps focus on the critical path first.)
 
----
-
-_Created: 2026-03-26_
-_Last updated: 2026-03-28_
+| Phase                                              | Plans Complete | Status      | Completed |
+| -------------------------------------------------- | -------------- | ----------- | --------- |
+| 1. Schema & Workflow Foundation                    | 0/3            | Planning    | -         |
+| 2. Orchestrator, Decomposition & Queue Integration | 0/4            | Planning    | -         |
+| 3. Verification & Human-in-the-Loop                | 0/4            | Planning    | -         |
+| 4. Recovery & Resumability                         | 0/TBD          | Not started | -         |
+| 5. Intake Pipeline & Templates                     | 0/TBD          | Not started | -         |
+| 6. Progress & Observability                        | 0/TBD          | Not started | -         |
