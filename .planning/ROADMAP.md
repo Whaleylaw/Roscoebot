@@ -124,7 +124,7 @@ Plans:
 
 - [ ] 05-01-PLAN.md -- Template schema and bundled templates (WorkflowTemplateFrontmatterSchema, code-feature/research-report/ops-runbook)
 - [ ] 05-02-PLAN.md -- Template resolver and save-as-template (three-tier lookup, saveAsTemplate)
-- [ ] 05-03-PLAN.md -- Project placement and intake payload (formatProjectsForPlacement, IntakePayload)
+- [x] 05-03-PLAN.md -- Project placement and intake payload (formatProjectsForPlacement, IntakePayload)
 - [ ] 05-04-PLAN.md -- Intake skill and barrel exports (INTAKE_SKILL_MD, index.ts wiring)
 - [ ] 05-05-PLAN.md -- Workflow synthesis code path and NotifyUser wiring (synthesizeWorkflow, createNotifyUserFn)
 

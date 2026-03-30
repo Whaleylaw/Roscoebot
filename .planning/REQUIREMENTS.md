@@ -65,9 +65,9 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Project Placement
 
-- [ ] **PPL-01**: Orchestrator determines whether work belongs in an existing project, a new project, or a sub-project
-- [ ] **PPL-02**: Project placement uses heuristics: keyword/capability match against active projects, scope similarity
-- [ ] **PPL-03**: User can override automatic project placement
+- [x] **PPL-01**: Orchestrator determines whether work belongs in an existing project, a new project, or a sub-project
+- [x] **PPL-02**: Project placement uses heuristics: keyword/capability match against active projects, scope similarity
+- [x] **PPL-03**: User can override automatic project placement
 
 ### Workflow Templates
 
@@ -169,9 +169,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | HIL-02      | Phase 3 | Complete |
 | HIL-03      | Phase 3 | Complete |
 | HIL-04      | Phase 3 | Complete |
-| PPL-01      | Phase 5 | Pending  |
-| PPL-02      | Phase 5 | Pending  |
-| PPL-03      | Phase 5 | Pending  |
+| PPL-01      | Phase 5 | Complete |
+| PPL-02      | Phase 5 | Complete |
+| PPL-03      | Phase 5 | Complete |
 | TPL-01      | Phase 5 | Pending  |
 | TPL-02      | Phase 5 | Pending  |
 | TPL-03      | Phase 5 | Pending  |
