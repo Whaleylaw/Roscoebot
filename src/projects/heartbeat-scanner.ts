@@ -320,6 +320,7 @@ async function filterClaimableTasks(
         agentId: "heartbeat-scanner",
         failureCategory: "permanent",
         failureReason: `Retry budget exhausted (${cp.recovery_attempts}/${maxRetries} attempts)`,
+        fromSection: "available",
       }).catch((err) => {
         log.error("Failed to escalate budget-exhausted task", { taskId, error: String(err) });
       });

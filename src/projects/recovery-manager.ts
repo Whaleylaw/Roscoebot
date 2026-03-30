@@ -10,6 +10,7 @@ import { createSubsystemLogger } from "../logging/subsystem.js";
 import { checkpointPath, readCheckpoint, writeCheckpoint } from "./checkpoint.js";
 import { parseProjectFrontmatter, parseTaskFrontmatter } from "./frontmatter.js";
 import { QueueManager } from "./queue-manager.js";
+import type { QueueSection } from "./queue-manager.js";
 import {
 	DEFAULT_MAX_RETRIES,
 	MAX_DECOMPOSITION_DEPTH,
@@ -29,6 +30,8 @@ export type RecoveryContext = {
 	failureCategory: FailureCategory;
 	failureReason: string;
 	sessionKey?: string;
+	/** Queue section the task is currently in. Defaults to "claimed". */
+	fromSection?: QueueSection;
 };
 
 /** Callback for notifying the user about escalation or blocking events. */
@@ -108,6 +111,7 @@ export async function executeRecoveryStrategy(
 	deps?: { notifyUser?: NotifyUserFn },
 ): Promise<FailTaskResult> {
 	const notifyUser = deps?.notifyUser ?? defaultNotifyUser;
+	const fromSection: QueueSection = ctx.fromSection ?? "claimed";
 	const taskFilePath = path.join(ctx.projectDir, "tasks", `${ctx.taskId}.md`);
 	const cpPath = checkpointPath(taskFilePath);
 
@@ -188,7 +192,7 @@ export async function executeRecoveryStrategy(
 			await writeCheckpoint(cpPath, checkpoint);
 
 			// Move task from claimed to available for re-pickup
-			await qm.moveTask(ctx.taskId, "claimed", "available");
+			await qm.moveTask(ctx.taskId, fromSection, "available");
 
 			log.info("Task queued for retry", {
 				taskId: ctx.taskId,
@@ -209,7 +213,7 @@ export async function executeRecoveryStrategy(
 			checkpoint.status = "blocked";
 			await writeCheckpoint(cpPath, checkpoint);
 
-			await qm.moveTask(ctx.taskId, "claimed", "blocked");
+			await qm.moveTask(ctx.taskId, fromSection, "blocked");
 
 			log.warn("Decompose-on-failure not yet wired; task moved to blocked", {
 				taskId: ctx.taskId,
@@ -237,7 +241,7 @@ export async function executeRecoveryStrategy(
 			checkpoint.status = "blocked";
 			await writeCheckpoint(cpPath, checkpoint);
 
-			await qm.moveTask(ctx.taskId, "claimed", "blocked");
+			await qm.moveTask(ctx.taskId, fromSection, "blocked");
 
 			log.warn("Reroute not yet wired; task moved to blocked", {
 				taskId: ctx.taskId,
@@ -265,7 +269,7 @@ export async function executeRecoveryStrategy(
 			await writeCheckpoint(cpPath, checkpoint);
 
 			// Move task to blocked queue section
-			await qm.moveTask(ctx.taskId, "claimed", "blocked");
+			await qm.moveTask(ctx.taskId, fromSection, "blocked");
 
 			// Notify user about escalation (D-04)
 			await notifyUser({
