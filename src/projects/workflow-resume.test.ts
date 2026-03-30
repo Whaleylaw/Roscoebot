@@ -67,7 +67,7 @@ describe("workflow-resume", () => {
           id: task.id,
           title: task.title,
           depends_on: task.depends_on ?? [],
-          workflow: task.workflow ?? null,
+          workflow: task.workflow ?? undefined,
         },
         {
           objective: "Test objective",

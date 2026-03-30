@@ -194,4 +194,73 @@ describe("workflow-status-hook", () => {
       expect(parsed.data.status).toBe("active");
     }
   });
+
+  // -- task-failed handler tests --
+
+  it("when a task fails and all tasks are done or blocked (with at least one blocked), workflow becomes 'failed'", async () => {
+    const { projectDir, workflowId } = await setupProject({
+      taskStatuses: { "TASK-001": "done", "TASK-002": "blocked" },
+      workflowStatus: "active",
+    });
+
+    const event = createInternalHookEvent("project", "task-failed", "test-session", {
+      taskId: "TASK-002",
+      workflowId,
+      projectDir,
+      recoveryOutcome: "escalate",
+    });
+    await triggerInternalHook(event);
+
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
+    const parsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.status).toBe("failed");
+    }
+  });
+
+  it("when a task fails but other tasks are still backlog or in-progress, workflow stays active", async () => {
+    const { projectDir, workflowId } = await setupProject({
+      taskStatuses: { "TASK-001": "blocked", "TASK-002": "backlog" },
+      workflowStatus: "active",
+    });
+
+    const event = createInternalHookEvent("project", "task-failed", "test-session", {
+      taskId: "TASK-001",
+      workflowId,
+      projectDir,
+      recoveryOutcome: "escalate",
+    });
+    await triggerInternalHook(event);
+
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
+    const parsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.status).toBe("active");
+    }
+  });
+
+  it("task-failed handler is a no-op when workflowId is null", async () => {
+    const { projectDir } = await setupProject({
+      taskStatuses: { "TASK-001": "done", "TASK-002": "blocked" },
+      workflowStatus: "active",
+    });
+
+    const event = createInternalHookEvent("project", "task-failed", "test-session", {
+      taskId: "TASK-002",
+      workflowId: null,
+      projectDir,
+      recoveryOutcome: "escalate",
+    });
+    await triggerInternalHook(event);
+
+    // Workflow should remain unchanged
+    const wfContent = await fs.readFile(path.join(projectDir, "workflows", "WF-001.md"), "utf-8");
+    const parsed = parseWorkflowFrontmatter(wfContent, "WF-001.md");
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.status).toBe("active");
+    }
+  });
 });
