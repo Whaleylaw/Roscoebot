@@ -92,6 +92,56 @@ export const projectsHandlers: GatewayRequestHandlers = {
     respond(true, { queue });
   },
 
+  "projects.workflows.list": async ({ params, respond }) => {
+    if (!projectsService) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "projects service not started"));
+      return;
+    }
+    const name = validateProjectParam(params, respond);
+    if (!name) return;
+    const workflows = await projectsService.getWorkflows(name);
+    if (!workflows) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `project not found: ${name}`),
+      );
+      return;
+    }
+    respond(true, { workflows: workflows.workflows, indexedAt: workflows.indexedAt });
+  },
+
+  "projects.workflows.get": async ({ params, respond }) => {
+    if (!projectsService) {
+      respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "projects service not started"));
+      return;
+    }
+    const name = validateProjectParam(params, respond);
+    if (!name) return;
+    const workflowId =
+      typeof params.workflowId === "string" && params.workflowId.trim()
+        ? params.workflowId.trim()
+        : null;
+    if (!workflowId) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, "missing required param: workflowId"),
+      );
+      return;
+    }
+    const workflow = await projectsService.getWorkflow(name, workflowId);
+    if (!workflow) {
+      respond(
+        false,
+        undefined,
+        errorShape(ErrorCodes.INVALID_REQUEST, `workflow not found: ${workflowId}`),
+      );
+      return;
+    }
+    respond(true, { workflow });
+  },
+
   "projects.review.approve": async ({ params, respond }) => {
     if (!projectsService) {
       respond(false, undefined, errorShape(ErrorCodes.UNAVAILABLE, "projects service not started"));

@@ -3,7 +3,14 @@ import path from "node:path";
 import type { CheckpointData } from "../projects/checkpoint.js";
 import { checkpointPath, readCheckpoint } from "../projects/checkpoint.js";
 import { ProjectSyncService } from "../projects/sync-service.js";
-import type { BoardIndex, ProjectIndex, QueueIndex, SyncEvent } from "../projects/sync-types.js";
+import type {
+  BoardIndex,
+  ProjectIndex,
+  QueueIndex,
+  SyncEvent,
+  WorkflowIndex,
+  WorkflowSummary,
+} from "../projects/sync-types.js";
 import type { GatewayBroadcastFn } from "./server-broadcast.js";
 
 /**
@@ -54,6 +61,12 @@ export class ProjectGatewayService {
       case "queue:changed":
         this.broadcast("projects.queue.changed", { project: event.project });
         break;
+      case "workflow:changed":
+        this.broadcast("projects.workflows.changed", {
+          project: event.project,
+          workflowId: event.workflowId,
+        });
+        break;
       case "reindex:complete":
         // Internal-only event; no broadcast needed
         break;
@@ -102,6 +115,20 @@ export class ProjectGatewayService {
   async getQueue(name: string): Promise<QueueIndex | null> {
     return this.readJsonFile<QueueIndex>(
       path.join(this.projectsRoot, name, ".index", "queue.json"),
+    );
+  }
+
+  /** Read a project's workflow summary index. */
+  async getWorkflows(name: string): Promise<WorkflowSummary | null> {
+    return this.readJsonFile<WorkflowSummary>(
+      path.join(this.projectsRoot, name, ".index", "workflows.json"),
+    );
+  }
+
+  /** Read a single workflow's index data. */
+  async getWorkflow(name: string, workflowId: string): Promise<WorkflowIndex | null> {
+    return this.readJsonFile<WorkflowIndex>(
+      path.join(this.projectsRoot, name, ".index", "workflows", `${workflowId}.json`),
     );
   }
 

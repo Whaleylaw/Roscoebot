@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { BoardIndex, ProjectIndex, QueueIndex } from "../../projects/sync-types.js";
+import type {
+  BoardIndex,
+  ProjectIndex,
+  QueueIndex,
+  WorkflowIndex,
+  WorkflowSummary,
+} from "../../projects/sync-types.js";
 // Import the handler module and its setter
 import { projectsHandlers, setProjectsService } from "./projects.js";
 import type { GatewayRequestHandlerOptions, RespondFn } from "./types.js";
@@ -9,6 +15,9 @@ describe("projectsHandlers", () => {
   const mockGetProject = vi.fn<(name: string) => Promise<ProjectIndex | null>>();
   const mockGetBoard = vi.fn<(name: string) => Promise<BoardIndex | null>>();
   const mockGetQueue = vi.fn<(name: string) => Promise<QueueIndex | null>>();
+  const mockGetWorkflows = vi.fn<(name: string) => Promise<WorkflowSummary | null>>();
+  const mockGetWorkflow =
+    vi.fn<(name: string, workflowId: string) => Promise<WorkflowIndex | null>>();
 
   let respond: RespondFn;
   let respondCalls: Array<{ ok: boolean; payload?: unknown; error?: unknown }>;
@@ -24,6 +33,8 @@ describe("projectsHandlers", () => {
       getProject: mockGetProject,
       getBoard: mockGetBoard,
       getQueue: mockGetQueue,
+      getWorkflows: mockGetWorkflows,
+      getWorkflow: mockGetWorkflow,
     } as never);
     vi.clearAllMocks();
   });
@@ -153,6 +164,118 @@ describe("projectsHandlers", () => {
         code: "INVALID_REQUEST",
         message: "project not found: gone",
       });
+    });
+  });
+
+  describe("projects.workflows.list", () => {
+    it("returns workflow summaries for valid project", async () => {
+      const summary: WorkflowSummary = {
+        workflows: [
+          {
+            id: "WF-001",
+            title: "Setup",
+            status: "active",
+            progress: { total: 3, done: 1, claimed: 1, review: 0, blocked: 0, available: 1 },
+          },
+        ],
+        indexedAt: "2026-01-01T00:00:00Z",
+      };
+      mockGetWorkflows.mockResolvedValueOnce(summary);
+
+      await projectsHandlers["projects.workflows.list"]!(makeOpts({ project: "alpha" }));
+
+      expect(mockGetWorkflows).toHaveBeenCalledWith("alpha");
+      expect(respondCalls).toEqual([
+        {
+          ok: true,
+          payload: { workflows: summary.workflows, indexedAt: summary.indexedAt },
+          error: undefined,
+        },
+      ]);
+    });
+
+    it("returns error when project not found", async () => {
+      mockGetWorkflows.mockResolvedValueOnce(null);
+
+      await projectsHandlers["projects.workflows.list"]!(makeOpts({ project: "gone" }));
+
+      expect(respondCalls).toHaveLength(1);
+      expect(respondCalls[0]!.ok).toBe(false);
+      expect(respondCalls[0]!.error).toMatchObject({
+        code: "INVALID_REQUEST",
+        message: "project not found: gone",
+      });
+    });
+
+    it("returns UNAVAILABLE when projectsService is null", async () => {
+      setProjectsService(null as never);
+
+      await projectsHandlers["projects.workflows.list"]!(makeOpts({ project: "alpha" }));
+
+      expect(respondCalls).toHaveLength(1);
+      expect(respondCalls[0]!.ok).toBe(false);
+      expect(respondCalls[0]!.error).toMatchObject({ code: "UNAVAILABLE" });
+    });
+  });
+
+  describe("projects.workflows.get", () => {
+    it("returns single workflow for valid project and workflowId", async () => {
+      const workflow: WorkflowIndex = {
+        id: "WF-001",
+        title: "Setup",
+        status: "active",
+        goal: "Set up project",
+        tasks: ["TASK-001", "TASK-002"],
+        template: null,
+        progress: { total: 2, done: 0, claimed: 1, review: 0, blocked: 0, available: 1 },
+        indexedAt: "2026-01-01T00:00:00Z",
+      };
+      mockGetWorkflow.mockResolvedValueOnce(workflow);
+
+      await projectsHandlers["projects.workflows.get"]!(
+        makeOpts({ project: "alpha", workflowId: "WF-001" }),
+      );
+
+      expect(mockGetWorkflow).toHaveBeenCalledWith("alpha", "WF-001");
+      expect(respondCalls).toEqual([{ ok: true, payload: { workflow }, error: undefined }]);
+    });
+
+    it("returns error when workflowId missing", async () => {
+      await projectsHandlers["projects.workflows.get"]!(makeOpts({ project: "alpha" }));
+
+      expect(respondCalls).toHaveLength(1);
+      expect(respondCalls[0]!.ok).toBe(false);
+      expect(respondCalls[0]!.error).toMatchObject({
+        code: "INVALID_REQUEST",
+        message: "missing required param: workflowId",
+      });
+    });
+
+    it("returns error when workflow not found", async () => {
+      mockGetWorkflow.mockResolvedValueOnce(null);
+
+      await projectsHandlers["projects.workflows.get"]!(
+        makeOpts({ project: "alpha", workflowId: "WF-999" }),
+      );
+
+      expect(respondCalls).toHaveLength(1);
+      expect(respondCalls[0]!.ok).toBe(false);
+      expect(respondCalls[0]!.error).toMatchObject({
+        code: "INVALID_REQUEST",
+        message: "workflow not found: WF-999",
+      });
+    });
+
+    it("returns UNAVAILABLE when projectsService is null", async () => {
+      setProjectsService(null as never);
+
+      await projectsHandlers["projects.workflows.get"]!(
+        makeOpts({ project: "alpha", workflowId: "WF-001" }),
+      );
+
+      expect(respondCalls).toHaveLength(1);
+      expect(respondCalls[0]!.ok).toBe(false);
+      expect(respondCalls[0]!.error).toMatchObject({ code: "UNAVAILABLE" });
     });
   });
 });
