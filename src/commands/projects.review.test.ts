@@ -70,6 +70,11 @@ Test task body.
     failed_approaches: [],
     log: [{ timestamp: "2026-03-29T00:00:00Z", agent: "agent-1", action: "Claimed task" }],
     notes: "",
+    recovery_attempts: 0,
+    last_attempted_at: null,
+    cumulative_tokens: 0,
+    failure_category: null,
+    failure_reason: null,
     verification: {
       last_run: "2026-03-29T00:00:00Z",
       passed: true,

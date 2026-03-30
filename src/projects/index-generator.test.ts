@@ -33,6 +33,8 @@ describe("index-generator", () => {
         columns: ["Backlog", "Done"],
         dashboard: { widgets: ["project-status"] },
         allowed_capabilities: [],
+        max_task_retries: 3,
+        recovery_token_budget: null,
       };
       const result = generateProjectIndex(fm);
       expect(result.name).toBe("test-project");
