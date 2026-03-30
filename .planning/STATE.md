@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 05-04-PLAN.md
-last_updated: "2026-03-30T03:12:20.027Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 05-05-PLAN.md
+last_updated: "2026-03-30T03:13:59.518Z"
 progress:
   total_phases: 6
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 20
-  completed_plans: 19
+  completed_plans: 20
 ---
 
 # Project State
@@ -65,6 +65,7 @@ _Updated after each plan completion_
 | Phase 05 P01 | 4min | 2 tasks | 4 files |
 | Phase 05 P02 | 3min | 2 tasks | 4 files |
 | Phase 05 P04 | 2min | 2 tasks | 3 files |
+| Phase 05 P05 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -107,6 +108,8 @@ Recent decisions affecting current work:
 - [Phase 05]: Template frontmatter uses duplicated extractYamlBlock for module independence; bundled templates as static string constants (D-08); listBundledTemplates cached at module level
 - [Phase 05]: tryReadTemplate as internal ENOENT-safe helper; STRIP_FIELDS constant for workflow-instance field removal during save-as-template
 - [Phase 05]: Intake skill follows orchestrator-templates.ts pattern of static string constants
+- [Phase 05]: synthesizeWorkflow uses deterministic heuristic decomposition (not LLM) for workflow structure; LLM decomposition happens later
+- [Phase 05]: createNotifyUserFn uses factory pattern keeping projects/ decoupled from gateway; sendFn injected at integration time
 
 ### Pending Todos
 
@@ -119,6 +122,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T03:12:20.023Z
-Stopped at: Completed 05-04-PLAN.md
+Last session: 2026-03-30T03:13:59.516Z
+Stopped at: Completed 05-05-PLAN.md
 Resume file: None

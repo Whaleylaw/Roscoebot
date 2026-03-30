@@ -126,7 +126,7 @@ Plans:
 - [x] 05-02-PLAN.md -- Template resolver and save-as-template (three-tier lookup, saveAsTemplate)
 - [x] 05-03-PLAN.md -- Project placement and intake payload (formatProjectsForPlacement, IntakePayload)
 - [x] 05-04-PLAN.md -- Intake skill and barrel exports (INTAKE_SKILL_MD, index.ts wiring)
-- [ ] 05-05-PLAN.md -- Workflow synthesis code path and NotifyUser wiring (synthesizeWorkflow, createNotifyUserFn)
+- [x] 05-05-PLAN.md -- Workflow synthesis code path and NotifyUser wiring (synthesizeWorkflow, createNotifyUserFn)
 
 ### Phase 6: Progress & Observability
 
