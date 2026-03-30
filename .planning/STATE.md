@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: Ready to execute
-stopped_at: Completed 05-03-PLAN.md
-last_updated: "2026-03-30T03:01:11.391Z"
+stopped_at: Completed 05-02-PLAN.md
+last_updated: "2026-03-30T03:08:14.175Z"
 progress:
   total_phases: 6
   completed_phases: 4
   total_plans: 20
-  completed_plans: 16
+  completed_plans: 18
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 05 (intake-pipeline-templates) — EXECUTING
-Plan: 2 of 5
+Plan: 4 of 5
 
 ## Performance Metrics
 
@@ -62,6 +62,8 @@ _Updated after each plan completion_
 | Phase 04 P03 | 3min | 2 tasks | 2 files |
 | Phase 04 P04 | 4min | 2 tasks | 4 files |
 | Phase 05 P03 | 3min | 2 tasks | 4 files |
+| Phase 05 P01 | 4min | 2 tasks | 4 files |
+| Phase 05 P02 | 3min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -101,6 +103,8 @@ Recent decisions affecting current work:
 - [Phase 05]: formatProjectsForPlacement is pure text formatting for LLM consumption -- no scoring per D-04
 - [Phase 05]: IntakePayload extends OrchestratorPayload via intersection type for backward compat
 - [Phase 05]: placementOverride supports both existing and new project overrides (PPL-03)
+- [Phase 05]: Template frontmatter uses duplicated extractYamlBlock for module independence; bundled templates as static string constants (D-08); listBundledTemplates cached at module level
+- [Phase 05]: tryReadTemplate as internal ENOENT-safe helper; STRIP_FIELDS constant for workflow-instance field removal during save-as-template
 
 ### Pending Todos
 
@@ -113,6 +117,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T03:01:11.388Z
-Stopped at: Completed 05-03-PLAN.md
+Last session: 2026-03-30T03:08:14.173Z
+Stopped at: Completed 05-02-PLAN.md
 Resume file: None

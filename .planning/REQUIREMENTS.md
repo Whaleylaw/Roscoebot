@@ -71,15 +71,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Workflow Templates
 
-- [ ] **TPL-01**: Reusable workflow templates exist as markdown files with parameterized frontmatter
-- [ ] **TPL-02**: Templates cover common work types (code feature, research report, ops runbook)
-- [ ] **TPL-03**: Orchestrator matches user goals to templates and configures them for the specific request
+- [x] **TPL-01**: Reusable workflow templates exist as markdown files with parameterized frontmatter
+- [x] **TPL-02**: Templates cover common work types (code feature, research report, ops runbook)
+- [x] **TPL-03**: Orchestrator matches user goals to templates and configures them for the specific request
 
 ### Workflow Synthesis
 
-- [ ] **SYN-01**: When no template matches, orchestrator generates a tailored workflow from the user's natural language goal
-- [ ] **SYN-02**: Synthesized workflows follow the same structure as templates (frontmatter + tasks + dependencies)
-- [ ] **SYN-03**: Generated workflows are written to disk before execution begins (not ephemeral)
+- [x] **SYN-01**: When no template matches, orchestrator generates a tailored workflow from the user's natural language goal
+- [x] **SYN-02**: Synthesized workflows follow the same structure as templates (frontmatter + tasks + dependencies)
+- [x] **SYN-03**: Generated workflows are written to disk before execution begins (not ephemeral)
 
 ### Capability Model
 
@@ -172,12 +172,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | PPL-01      | Phase 5 | Complete |
 | PPL-02      | Phase 5 | Complete |
 | PPL-03      | Phase 5 | Complete |
-| TPL-01      | Phase 5 | Pending  |
-| TPL-02      | Phase 5 | Pending  |
-| TPL-03      | Phase 5 | Pending  |
-| SYN-01      | Phase 5 | Pending  |
-| SYN-02      | Phase 5 | Pending  |
-| SYN-03      | Phase 5 | Pending  |
+| TPL-01      | Phase 5 | Complete |
+| TPL-02      | Phase 5 | Complete |
+| TPL-03      | Phase 5 | Complete |
+| SYN-01      | Phase 5 | Complete |
+| SYN-02      | Phase 5 | Complete |
+| SYN-03      | Phase 5 | Complete |
 | CAP-01      | Phase 1 | Complete |
 | CAP-02      | Phase 2 | Complete |
 | CAP-03      | Phase 2 | Complete |
