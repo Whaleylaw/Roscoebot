@@ -15,7 +15,7 @@ Decimal phases appear between their surrounding integers in numeric order.
 
 - [ ] **Phase 1: Schema & Workflow Foundation** - Workflow file format, extended task frontmatter, and directory structure
 - [ ] **Phase 2: Orchestrator, Decomposition & Queue Integration** - Orchestrator agent setup, goal-to-task decomposition, dependency-aware queue placement
-- [ ] **Phase 3: Verification & Human-in-the-Loop** - Structured verification per task, side-effect classification, human approval gates
+- [x] **Phase 3: Verification & Human-in-the-Loop** - Structured verification per task, side-effect classification, human approval gates
 - [ ] **Phase 4: Recovery & Resumability** - Retry/decompose/reroute/escalate on failure, anti-loop budgets, cross-session resume
 - [ ] **Phase 5: Intake Pipeline & Templates** - Project placement, workflow templates, workflow synthesis from natural language
 - [ ] **Phase 6: Progress & Observability** - Workflow progress through existing board/queue surfaces, status querying
@@ -84,7 +84,7 @@ Plans:
 - [x] 03-01-PLAN.md -- Schema extensions (success_criteria, review queue section, checkpoint verification, check runners)
 - [x] 03-02-PLAN.md -- Verification engine and pre-complete hook gate logic
 - [x] 03-03-PLAN.md -- CLI review approve/reject commands and gateway RPC methods
-- [ ] 03-04-PLAN.md -- Board UI Review column, verification evidence display, approve/reject buttons
+- [x] 03-04-PLAN.md -- Board UI Review column, verification evidence display, approve/reject buttons
 
 ### Phase 4: Recovery & Resumability
 
