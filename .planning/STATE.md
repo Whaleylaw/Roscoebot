@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 06-01-PLAN.md
-last_updated: "2026-03-30T14:22:00.295Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 06-03-PLAN.md
+last_updated: "2026-03-30T14:26:36.398Z"
 progress:
   total_phases: 6
-  completed_phases: 5
+  completed_phases: 6
   total_plans: 23
-  completed_plans: 22
+  completed_plans: 23
 ---
 
 # Project State
@@ -68,6 +68,7 @@ _Updated after each plan completion_
 | Phase 05 P05 | 4min | 2 tasks | 4 files |
 | Phase 06 P02 | 3min | 1 tasks | 2 files |
 | Phase 06 P01 | 4min | 2 tasks | 5 files |
+| Phase 06 P03 | 3min | 2 tasks | 6 files |
 
 ## Accumulated Context
 
@@ -115,6 +116,8 @@ Recent decisions affecting current work:
 - [Phase 06]: Workflow section only renders when WF-NNN.md files exist (not just workflows/ dir), since scaffold always creates it
 - [Phase 06]: Progress total uses frontmatter.tasks.length so total matches declared task list
 - [Phase 06]: Workflow index files at .index/workflows/WF-NNN.json, summary at .index/workflows.json
+- [Phase 06]: Workflow RPC handlers follow same pattern as board/queue handlers for consistency
+- [Phase 06]: workflows.list returns flattened {workflows, indexedAt} for simpler UI consumption
 
 ### Pending Todos
 
@@ -127,6 +130,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T14:22:00.292Z
-Stopped at: Completed 06-01-PLAN.md
+Last session: 2026-03-30T14:26:36.395Z
+Stopped at: Completed 06-03-PLAN.md
 Resume file: None
