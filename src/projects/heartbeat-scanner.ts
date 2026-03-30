@@ -133,6 +133,78 @@ export async function scanAndClaimTask(opts: ScanAndClaimOpts): Promise<ScanAndC
   }
 }
 
+// D-13: Stale claim threshold -- tasks claimed with no checkpoint activity past this are considered abandoned
+export const STALE_CLAIM_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Detect and release tasks in the "claimed" queue section that have no
+ * recent checkpoint activity. Per D-13, stale tasks are moved back to
+ * "available" for re-claiming.
+ *
+ * TODO: Wire liveness ping via sessions_send before releasing -- D-13
+ * specifies ping first, release on no response. For v1, we use checkpoint
+ * staleness as a proxy for agent liveness.
+ */
+export async function detectStaleClaims(opts: {
+  projectDir: string;
+}): Promise<{ releasedTasks: string[] }> {
+  const { projectDir } = opts;
+  const releasedTasks: string[] = [];
+  const qm = new QueueManager(projectDir);
+
+  let queue;
+  try {
+    queue = await qm.readQueue();
+  } catch {
+    return { releasedTasks };
+  }
+
+  if (queue.claimed.length === 0) {
+    return { releasedTasks };
+  }
+
+  const tasksDir = path.join(projectDir, "tasks");
+  const now = Date.now();
+
+  for (const entry of queue.claimed) {
+    const taskId = entry.taskId;
+    const cpPath = path.join(tasksDir, `${taskId}.checkpoint.json`);
+    const cp = await readCheckpoint(cpPath);
+
+    // No checkpoint = just claimed, checkpoint not yet created -- skip conservatively
+    if (!cp) {
+      continue;
+    }
+
+    // Determine last activity: most recent log entry timestamp, or claimed_at
+    let lastActivityMs: number;
+    if (cp.log.length > 0) {
+      // Use the most recent log entry timestamp
+      const latestLog = cp.log[cp.log.length - 1]!;
+      lastActivityMs = new Date(latestLog.timestamp).getTime();
+    } else {
+      lastActivityMs = new Date(cp.claimed_at).getTime();
+    }
+
+    if (now - lastActivityMs > STALE_CLAIM_THRESHOLD_MS) {
+      log.warn("Stale claimed task detected, releasing to available", {
+        taskId,
+        lastActivity: new Date(lastActivityMs).toISOString(),
+        staleDurationMs: now - lastActivityMs,
+      });
+
+      try {
+        await qm.releaseTask(taskId);
+        releasedTasks.push(taskId);
+      } catch (err) {
+        log.error("Failed to release stale task", { taskId, error: String(err) });
+      }
+    }
+  }
+
+  return { releasedTasks };
+}
+
 // -- Helpers --
 
 /** Scan tasks/ directory for an active checkpoint belonging to this agent. */

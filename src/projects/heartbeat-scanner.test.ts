@@ -683,6 +683,155 @@ describe("budget gate", () => {
   });
 });
 
+describe("stale claim detection", () => {
+  let tmpDirs: string[] = [];
+
+  beforeEach(() => {
+    tmpDirs = [];
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    for (const dir of tmpDirs) {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  async function setup(opts: Parameters<typeof setupProjectDir>[0] = {}): Promise<string> {
+    const dir = await setupProjectDir(opts);
+    tmpDirs.push(dir);
+    return dir;
+  }
+
+  it("STALE_CLAIM_THRESHOLD_MS is 30 minutes", async () => {
+    const { STALE_CLAIM_THRESHOLD_MS } = await import("./heartbeat-scanner.js");
+    expect(STALE_CLAIM_THRESHOLD_MS).toBe(30 * 60 * 1000);
+  });
+
+  it("detects stale claimed tasks and releases them to available", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-03-27T12:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    const dir = await setup({
+      claimedTasks: [{ id: "TASK-001", agent: "agent-stale" }],
+    });
+
+    // Write a checkpoint with last activity > 30 min ago
+    const cpData = {
+      status: "in-progress",
+      claimed_by: "agent-stale",
+      claimed_at: new Date(now - 40 * 60 * 1000).toISOString(),
+      last_step: "",
+      next_action: "",
+      progress_pct: 0,
+      files_modified: [],
+      failed_approaches: [],
+      log: [
+        {
+          timestamp: new Date(now - 35 * 60 * 1000).toISOString(),
+          agent: "agent-stale",
+          action: "Started work",
+        },
+      ],
+      notes: "",
+      recovery_attempts: 0,
+      last_attempted_at: null,
+      cumulative_tokens: 0,
+      failure_category: null,
+      failure_reason: null,
+    };
+    await fs.writeFile(
+      path.join(dir, "tasks", "TASK-001.checkpoint.json"),
+      JSON.stringify(cpData, null, 2),
+      "utf8",
+    );
+
+    const { detectStaleClaims } = await import("./heartbeat-scanner.js");
+    const result = await detectStaleClaims({ projectDir: dir });
+
+    expect(result.releasedTasks).toContain("TASK-001");
+
+    // Verify queue moved from claimed to available
+    const queueContent = await fs.readFile(path.join(dir, "queue.md"), "utf8");
+    const availableSection = queueContent.split("## Claimed")[0] ?? "";
+    expect(availableSection).toContain("TASK-001");
+  });
+
+  it("skips tasks with recent checkpoint activity", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-03-27T12:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    const dir = await setup({
+      claimedTasks: [{ id: "TASK-001", agent: "agent-active" }],
+    });
+
+    // Recent activity -- 5 min ago
+    const cpData = {
+      status: "in-progress",
+      claimed_by: "agent-active",
+      claimed_at: new Date(now - 10 * 60 * 1000).toISOString(),
+      last_step: "Working",
+      next_action: "",
+      progress_pct: 50,
+      files_modified: [],
+      failed_approaches: [],
+      log: [
+        {
+          timestamp: new Date(now - 5 * 60 * 1000).toISOString(),
+          agent: "agent-active",
+          action: "Recent activity",
+        },
+      ],
+      notes: "",
+      recovery_attempts: 0,
+      last_attempted_at: null,
+      cumulative_tokens: 0,
+      failure_category: null,
+      failure_reason: null,
+    };
+    await fs.writeFile(
+      path.join(dir, "tasks", "TASK-001.checkpoint.json"),
+      JSON.stringify(cpData, null, 2),
+      "utf8",
+    );
+
+    const { detectStaleClaims } = await import("./heartbeat-scanner.js");
+    const result = await detectStaleClaims({ projectDir: dir });
+
+    expect(result.releasedTasks).toHaveLength(0);
+  });
+
+  it("does nothing when no tasks are in claimed section", async () => {
+    const dir = await setup({
+      availableTasks: [{ id: "TASK-001", title: "Available", capabilities: [] }],
+    });
+
+    const { detectStaleClaims } = await import("./heartbeat-scanner.js");
+    const result = await detectStaleClaims({ projectDir: dir });
+
+    expect(result.releasedTasks).toHaveLength(0);
+  });
+
+  it("skips tasks with no checkpoint (just claimed, not yet started)", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-03-27T12:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    const dir = await setup({
+      claimedTasks: [{ id: "TASK-001", agent: "agent-new" }],
+    });
+    // No checkpoint file -- task was just claimed
+
+    const { detectStaleClaims } = await import("./heartbeat-scanner.js");
+    const result = await detectStaleClaims({ projectDir: dir });
+
+    expect(result.releasedTasks).toHaveLength(0);
+  });
+});
+
 describe("integration", () => {
   let tmpDirs: string[] = [];
 
