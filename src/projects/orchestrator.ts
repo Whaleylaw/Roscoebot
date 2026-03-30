@@ -6,6 +6,10 @@ import { validateCapabilities } from "./capability-registry.js";
 import { parseProjectFrontmatter, parseWorkflowFrontmatter } from "./frontmatter.js";
 import { QueueManager } from "./queue-manager.js";
 import { ensureWorkflowsDir, ProjectManager, writeFileAtomic } from "./scaffold.js";
+import {
+  WorkflowTemplateFrontmatterSchema,
+  type WorkflowTemplateFrontmatter,
+} from "./template-schema.js";
 import { generateTaskMd, generateWorkflowMd } from "./templates.js";
 
 /**
@@ -343,6 +347,114 @@ export async function createTaskBatch(opts: CreateTaskBatchOpts): Promise<Create
   }
 }
 
+// --- synthesizeWorkflow ---
+
+export type SynthesizeWorkflowOpts = {
+  goal: string;
+  goalTitle: string;
+  templateParams?: Record<string, unknown>;
+  constraints?: OrchestratorPayload["constraints"];
+};
+
+export type SynthesizeWorkflowResult = {
+  frontmatter: WorkflowTemplateFrontmatter;
+  markdown: string;
+};
+
+/** Side-effect keyword patterns that suggest irreversible or reversible actions. */
+const SIDE_EFFECT_KEYWORDS = /\b(deploy|delete|send|publish|push|release|remove|drop)\b/i;
+
+/**
+ * Convert a title string to kebab-case, truncated to 50 chars.
+ */
+function toKebabName(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 50);
+}
+
+/**
+ * Heuristically decompose a goal string into logical step titles.
+ * Splits on sentence-level punctuation, conjunctions, and sequential markers.
+ * Returns 2-5 step titles.
+ */
+function decomposeGoalToSteps(goal: string): string[] {
+  // Split on common sequential markers and sentence boundaries
+  const separators =
+    /(?:,\s*then\s+|;\s*then\s+|\.\s+then\s+|,\s*and\s+then\s+|\bthen\s+|\bfinally\s+|\bafterward[s]?\s+|\bnext\s+|\bfollowed\s+by\s+|[.;]\s+)/i;
+
+  const parts = goal
+    .split(separators)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 3);
+
+  if (parts.length >= 2 && parts.length <= 5) {
+    return parts;
+  }
+
+  // If splitting produced too few or too many, fall back to sentence splitting
+  const sentences = goal
+    .split(/[.;!]\s+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 3);
+
+  if (sentences.length >= 2) {
+    return sentences.slice(0, 5);
+  }
+
+  // Last resort: create 2 generic steps
+  return ["Analyze requirements and plan approach", "Implement and verify solution"];
+}
+
+/**
+ * Deterministic heuristic decomposition of a goal into a workflow template structure.
+ * NOT an LLM call -- produces the workflow structure/outline written to disk per SYN-03.
+ * The LLM decomposition into actual tasks happens later in orchestrateGoal.
+ *
+ * Validates output through WorkflowTemplateFrontmatterSchema (D-21).
+ */
+export function synthesizeWorkflow(opts: SynthesizeWorkflowOpts): SynthesizeWorkflowResult {
+  const { goal, goalTitle } = opts;
+  const name = toKebabName(goalTitle);
+  const stepTitles = decomposeGoalToSteps(goal);
+
+  // Detect potential side effects in the goal for step classification
+  const hasSideEffects = SIDE_EFFECT_KEYWORDS.test(goal);
+
+  const steps = stepTitles.map((title, i) => ({
+    id: `step-${i + 1}`,
+    title: title.charAt(0).toUpperCase() + title.slice(1),
+    owner: "agent" as const,
+    verification_type: "automatic" as const,
+    // Last step gets side_effect_class if goal mentions deploy/delete/send
+    side_effect_class:
+      hasSideEffects && i === stepTitles.length - 1
+        ? ("reversible" as const)
+        : ("none" as const),
+  }));
+
+  // Validate through schema to ensure structural compliance (D-21)
+  const frontmatter = WorkflowTemplateFrontmatterSchema.parse({
+    name,
+    description: goal,
+    params: {},
+    steps,
+  });
+
+  // Serialize to markdown with YAML frontmatter
+  const yamlStr = YAML.stringify(
+    { name: frontmatter.name, description: frontmatter.description, params: frontmatter.params, steps: frontmatter.steps },
+    { schema: "core" },
+  );
+  const stepsList = frontmatter.steps.map((s, i) => `${i + 1}. ${s.title}`).join("\n");
+  const markdown = `---\n${yamlStr}---\n\n## Goal\n\n${goal}\n\n## Steps\n\n${stepsList}\n`;
+
+  return { frontmatter, markdown };
+}
+
 // --- orchestrateGoal pipeline ---
 
 export type OrchestrateGoalOpts = {
@@ -351,6 +463,8 @@ export type OrchestrateGoalOpts = {
   goalTitle: string;
   tasks: DecomposedTask[];
   agentCapabilities: Map<string, string[]>;
+  /** When true, synthesize a workflow from the goal and write to disk before task creation. */
+  synthesize?: boolean;
 };
 
 export type OrchestrateGoalResult =
@@ -396,7 +510,7 @@ async function updateWorkflowStatus(
  * Returns errors without side effects if validation fails.
  */
 export async function orchestrateGoal(opts: OrchestrateGoalOpts): Promise<OrchestrateGoalResult> {
-  const { projectDir, goal, goalTitle, tasks, agentCapabilities } = opts;
+  const { projectDir, goal, goalTitle, tasks, agentCapabilities, synthesize } = opts;
 
   // Step 1: Read project allowed_capabilities
   const projectMdPath = path.join(projectDir, "PROJECT.md");
@@ -419,10 +533,15 @@ export async function orchestrateGoal(opts: OrchestrateGoalOpts): Promise<Orches
   // Step 4: Create workflow file
   const pm = new ProjectManager();
   const wfId = await pm.nextWorkflowId(projectDir);
+
+  // Synthesize branch: generate workflow from goal and write to disk (SYN-03, D-20)
+  // The synthesized workflow uses the same template schema structure (D-21)
+  const template = synthesize ? "synthesized" : undefined;
   const wfContent = generateWorkflowMd({
     id: wfId,
     title: goalTitle,
     goal,
+    template: template ?? undefined,
   });
   const wfPath = path.join(projectDir, "workflows", `${wfId}.md`);
   await writeFileAtomic(wfPath, wfContent);
