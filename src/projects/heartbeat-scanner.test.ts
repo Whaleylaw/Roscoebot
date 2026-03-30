@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import YAML from "yaml";
 import { scanAndClaimTask } from "./heartbeat-scanner.js";
 
@@ -464,6 +464,371 @@ describe("heartbeat-scanner", () => {
     if (result.type === "claimed") {
       expect(result.task.id).toBe("TASK-002");
     }
+  });
+});
+
+describe("budget gate", () => {
+  let tmpDirs: string[] = [];
+
+  beforeEach(() => {
+    tmpDirs = [];
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    for (const dir of tmpDirs) {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  /** Helper: write a PROJECT.md with optional max_task_retries. */
+  async function writeProjectMd(projectDir: string, maxRetries?: number): Promise<void> {
+    const fm: Record<string, unknown> = { name: "test-project", status: "active" };
+    if (maxRetries !== undefined) {
+      fm.max_task_retries = maxRetries;
+    }
+    const yamlStr = YAML.stringify(fm, { schema: "core" });
+    await fs.writeFile(path.join(projectDir, "PROJECT.md"), `---\n${yamlStr}---\n\n# Test\n`, "utf8");
+  }
+
+  /** Helper: write a checkpoint with recovery fields. */
+  async function writeRecoveryCheckpoint(
+    tasksDir: string,
+    taskId: string,
+    opts: {
+      recovery_attempts: number;
+      last_attempted_at: string | null;
+      claimed_by?: string;
+      status?: string;
+    },
+  ): Promise<void> {
+    const cp = {
+      status: opts.status ?? "in-progress",
+      claimed_by: opts.claimed_by ?? "agent-prev",
+      claimed_at: "2026-03-27T10:00:00Z",
+      last_step: "",
+      next_action: "",
+      progress_pct: 0,
+      files_modified: [],
+      failed_approaches: [],
+      log: [{ timestamp: "2026-03-27T10:00:00Z", agent: "agent-prev", action: "Claimed" }],
+      notes: "",
+      recovery_attempts: opts.recovery_attempts,
+      last_attempted_at: opts.last_attempted_at,
+      cumulative_tokens: 0,
+      failure_category: "transient",
+      failure_reason: "test failure",
+    };
+    await fs.writeFile(
+      path.join(tasksDir, `${taskId}.checkpoint.json`),
+      JSON.stringify(cp, null, 2),
+      "utf8",
+    );
+  }
+
+  async function setup(opts: Parameters<typeof setupProjectDir>[0] = {}): Promise<string> {
+    const dir = await setupProjectDir(opts);
+    tmpDirs.push(dir);
+    return dir;
+  }
+
+  it("skips task when recovery_attempts >= max_task_retries (default 3) and escalates", async () => {
+    const dir = await setup({
+      availableTasks: [{ id: "TASK-001", title: "Budget exhausted", capabilities: [] }],
+    });
+    await writeProjectMd(dir);
+    await writeRecoveryCheckpoint(path.join(dir, "tasks"), "TASK-001", {
+      recovery_attempts: 3,
+      last_attempted_at: "2026-03-27T09:00:00Z",
+    });
+
+    // Mock executeRecoveryStrategy to verify it is called for budget-exhausted tasks
+    const recoveryMod = await import("./recovery-manager.js");
+    const spy = vi.spyOn(recoveryMod, "executeRecoveryStrategy").mockResolvedValue({ outcome: "escalate" });
+
+    const result = await scanAndClaimTask({
+      agentId: "agent-1",
+      agentCapabilities: [],
+      projectDir: dir,
+    });
+
+    expect(result.type).toBe("idle");
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "TASK-001",
+        failureCategory: "permanent",
+        agentId: "heartbeat-scanner",
+      }),
+    );
+  });
+
+  it("skips task within backoff window", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-03-27T10:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    const dir = await setup({
+      availableTasks: [{ id: "TASK-001", title: "In backoff", capabilities: [] }],
+    });
+    await writeProjectMd(dir);
+    // recovery_attempts=1, BACKOFF_MS[1]=25000ms, last_attempted_at 10 seconds ago -> still in window
+    await writeRecoveryCheckpoint(path.join(dir, "tasks"), "TASK-001", {
+      recovery_attempts: 1,
+      last_attempted_at: new Date(now - 10_000).toISOString(),
+    });
+
+    const result = await scanAndClaimTask({
+      agentId: "agent-1",
+      agentCapabilities: [],
+      projectDir: dir,
+    });
+
+    expect(result.type).toBe("idle");
+  });
+
+  it("includes task when recovery_attempts < max and backoff elapsed", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-03-27T10:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    const dir = await setup({
+      availableTasks: [{ id: "TASK-001", title: "Backoff elapsed", capabilities: [] }],
+    });
+    await writeProjectMd(dir);
+    // recovery_attempts=1, BACKOFF_MS[1]=25000ms, last_attempted_at 30s ago -> past window
+    await writeRecoveryCheckpoint(path.join(dir, "tasks"), "TASK-001", {
+      recovery_attempts: 1,
+      last_attempted_at: new Date(now - 30_000).toISOString(),
+    });
+
+    const result = await scanAndClaimTask({
+      agentId: "agent-1",
+      agentCapabilities: [],
+      projectDir: dir,
+    });
+
+    expect(result.type).toBe("claimed");
+  });
+
+  it("includes task when no checkpoint exists (new task)", async () => {
+    const dir = await setup({
+      availableTasks: [{ id: "TASK-001", title: "Fresh task", capabilities: [] }],
+    });
+    await writeProjectMd(dir);
+    // No checkpoint file
+
+    const result = await scanAndClaimTask({
+      agentId: "agent-1",
+      agentCapabilities: [],
+      projectDir: dir,
+    });
+
+    expect(result.type).toBe("claimed");
+  });
+
+  it("reads max_task_retries from PROJECT.md, falls back to DEFAULT_MAX_RETRIES", async () => {
+    const dir = await setup({
+      availableTasks: [{ id: "TASK-001", title: "Custom retries", capabilities: [] }],
+    });
+    // Set max_task_retries=1 in PROJECT.md
+    await writeProjectMd(dir, 1);
+    // Only 1 attempt, so with max_task_retries=1 it should be skipped
+    await writeRecoveryCheckpoint(path.join(dir, "tasks"), "TASK-001", {
+      recovery_attempts: 1,
+      last_attempted_at: "2026-03-27T09:00:00Z",
+    });
+
+    const recoveryMod = await import("./recovery-manager.js");
+    vi.spyOn(recoveryMod, "executeRecoveryStrategy").mockResolvedValue({ outcome: "escalate" });
+
+    const result = await scanAndClaimTask({
+      agentId: "agent-1",
+      agentCapabilities: [],
+      projectDir: dir,
+    });
+
+    expect(result.type).toBe("idle");
+  });
+
+  it("budget-exhausted task calls executeRecoveryStrategy with permanent category", async () => {
+    const dir = await setup({
+      availableTasks: [{ id: "TASK-001", title: "Exhausted", capabilities: [] }],
+    });
+    await writeProjectMd(dir);
+    await writeRecoveryCheckpoint(path.join(dir, "tasks"), "TASK-001", {
+      recovery_attempts: 5,
+      last_attempted_at: "2026-03-27T09:00:00Z",
+    });
+
+    const recoveryMod = await import("./recovery-manager.js");
+    const spy = vi.spyOn(recoveryMod, "executeRecoveryStrategy").mockResolvedValue({ outcome: "escalate" });
+
+    await scanAndClaimTask({
+      agentId: "agent-1",
+      agentCapabilities: [],
+      projectDir: dir,
+    });
+
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: "TASK-001",
+        failureCategory: "permanent",
+        failureReason: expect.stringContaining("Retry budget exhausted"),
+        agentId: "heartbeat-scanner",
+        projectDir: dir,
+      }),
+    );
+  });
+});
+
+describe("stale claim detection", () => {
+  let tmpDirs: string[] = [];
+
+  beforeEach(() => {
+    tmpDirs = [];
+  });
+
+  afterEach(async () => {
+    vi.restoreAllMocks();
+    vi.useRealTimers();
+    for (const dir of tmpDirs) {
+      await fs.rm(dir, { recursive: true, force: true });
+    }
+  });
+
+  async function setup(opts: Parameters<typeof setupProjectDir>[0] = {}): Promise<string> {
+    const dir = await setupProjectDir(opts);
+    tmpDirs.push(dir);
+    return dir;
+  }
+
+  it("STALE_CLAIM_THRESHOLD_MS is 30 minutes", async () => {
+    const { STALE_CLAIM_THRESHOLD_MS } = await import("./heartbeat-scanner.js");
+    expect(STALE_CLAIM_THRESHOLD_MS).toBe(30 * 60 * 1000);
+  });
+
+  it("detects stale claimed tasks and releases them to available", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-03-27T12:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    const dir = await setup({
+      claimedTasks: [{ id: "TASK-001", agent: "agent-stale" }],
+    });
+
+    // Write a checkpoint with last activity > 30 min ago
+    const cpData = {
+      status: "in-progress",
+      claimed_by: "agent-stale",
+      claimed_at: new Date(now - 40 * 60 * 1000).toISOString(),
+      last_step: "",
+      next_action: "",
+      progress_pct: 0,
+      files_modified: [],
+      failed_approaches: [],
+      log: [
+        {
+          timestamp: new Date(now - 35 * 60 * 1000).toISOString(),
+          agent: "agent-stale",
+          action: "Started work",
+        },
+      ],
+      notes: "",
+      recovery_attempts: 0,
+      last_attempted_at: null,
+      cumulative_tokens: 0,
+      failure_category: null,
+      failure_reason: null,
+    };
+    await fs.writeFile(
+      path.join(dir, "tasks", "TASK-001.checkpoint.json"),
+      JSON.stringify(cpData, null, 2),
+      "utf8",
+    );
+
+    const { detectStaleClaims } = await import("./heartbeat-scanner.js");
+    const result = await detectStaleClaims({ projectDir: dir });
+
+    expect(result.releasedTasks).toContain("TASK-001");
+
+    // Verify queue moved from claimed to available
+    const queueContent = await fs.readFile(path.join(dir, "queue.md"), "utf8");
+    const availableSection = queueContent.split("## Claimed")[0] ?? "";
+    expect(availableSection).toContain("TASK-001");
+  });
+
+  it("skips tasks with recent checkpoint activity", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-03-27T12:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    const dir = await setup({
+      claimedTasks: [{ id: "TASK-001", agent: "agent-active" }],
+    });
+
+    // Recent activity -- 5 min ago
+    const cpData = {
+      status: "in-progress",
+      claimed_by: "agent-active",
+      claimed_at: new Date(now - 10 * 60 * 1000).toISOString(),
+      last_step: "Working",
+      next_action: "",
+      progress_pct: 50,
+      files_modified: [],
+      failed_approaches: [],
+      log: [
+        {
+          timestamp: new Date(now - 5 * 60 * 1000).toISOString(),
+          agent: "agent-active",
+          action: "Recent activity",
+        },
+      ],
+      notes: "",
+      recovery_attempts: 0,
+      last_attempted_at: null,
+      cumulative_tokens: 0,
+      failure_category: null,
+      failure_reason: null,
+    };
+    await fs.writeFile(
+      path.join(dir, "tasks", "TASK-001.checkpoint.json"),
+      JSON.stringify(cpData, null, 2),
+      "utf8",
+    );
+
+    const { detectStaleClaims } = await import("./heartbeat-scanner.js");
+    const result = await detectStaleClaims({ projectDir: dir });
+
+    expect(result.releasedTasks).toHaveLength(0);
+  });
+
+  it("does nothing when no tasks are in claimed section", async () => {
+    const dir = await setup({
+      availableTasks: [{ id: "TASK-001", title: "Available", capabilities: [] }],
+    });
+
+    const { detectStaleClaims } = await import("./heartbeat-scanner.js");
+    const result = await detectStaleClaims({ projectDir: dir });
+
+    expect(result.releasedTasks).toHaveLength(0);
+  });
+
+  it("skips tasks with no checkpoint (just claimed, not yet started)", async () => {
+    vi.useFakeTimers();
+    const now = new Date("2026-03-27T12:00:00Z").getTime();
+    vi.setSystemTime(now);
+
+    const dir = await setup({
+      claimedTasks: [{ id: "TASK-001", agent: "agent-new" }],
+    });
+    // No checkpoint file -- task was just claimed
+
+    const { detectStaleClaims } = await import("./heartbeat-scanner.js");
+    const result = await detectStaleClaims({ projectDir: dir });
+
+    expect(result.releasedTasks).toHaveLength(0);
   });
 });
 

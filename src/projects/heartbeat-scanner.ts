@@ -9,8 +9,10 @@ import {
   readCheckpoint,
   writeCheckpoint,
 } from "./checkpoint.js";
-import { parseTaskFrontmatter } from "./frontmatter.js";
+import { parseProjectFrontmatter, parseTaskFrontmatter } from "./frontmatter.js";
 import { QueueManager } from "./queue-manager.js";
+import { executeRecoveryStrategy } from "./recovery-manager.js";
+import { BACKOFF_MS, DEFAULT_MAX_RETRIES } from "./recovery-types.js";
 import type { TaskFrontmatter } from "./types.js";
 
 const log = createSubsystemLogger("projects/heartbeat-scanner");
@@ -77,11 +79,24 @@ export async function scanAndClaimTask(opts: ScanAndClaimOpts): Promise<ScanAndC
       return { type: "idle" };
     }
 
+    // Read project-level max_task_retries (D-07)
+    let maxRetries = DEFAULT_MAX_RETRIES;
+    try {
+      const projectContent = await fs.readFile(path.join(projectDir, "PROJECT.md"), "utf8");
+      const parsed = parseProjectFrontmatter(projectContent, "PROJECT.md");
+      if (parsed.success) {
+        maxRetries = parsed.data.max_task_retries;
+      }
+    } catch {
+      // PROJECT.md not found or unreadable -- use default
+    }
+
     // Step 3: Filter claimable tasks
     const claimable = await filterClaimableTasks(
       queue.available.map((e) => e.taskId),
       projectDir,
       agentCapabilities,
+      maxRetries,
     );
 
     if (claimable.length === 0) {
@@ -116,6 +131,78 @@ export async function scanAndClaimTask(opts: ScanAndClaimOpts): Promise<ScanAndC
     });
     return { type: "idle" };
   }
+}
+
+// D-13: Stale claim threshold -- tasks claimed with no checkpoint activity past this are considered abandoned
+export const STALE_CLAIM_THRESHOLD_MS = 30 * 60 * 1000; // 30 minutes
+
+/**
+ * Detect and release tasks in the "claimed" queue section that have no
+ * recent checkpoint activity. Per D-13, stale tasks are moved back to
+ * "available" for re-claiming.
+ *
+ * TODO: Wire liveness ping via sessions_send before releasing -- D-13
+ * specifies ping first, release on no response. For v1, we use checkpoint
+ * staleness as a proxy for agent liveness.
+ */
+export async function detectStaleClaims(opts: {
+  projectDir: string;
+}): Promise<{ releasedTasks: string[] }> {
+  const { projectDir } = opts;
+  const releasedTasks: string[] = [];
+  const qm = new QueueManager(projectDir);
+
+  let queue;
+  try {
+    queue = await qm.readQueue();
+  } catch {
+    return { releasedTasks };
+  }
+
+  if (queue.claimed.length === 0) {
+    return { releasedTasks };
+  }
+
+  const tasksDir = path.join(projectDir, "tasks");
+  const now = Date.now();
+
+  for (const entry of queue.claimed) {
+    const taskId = entry.taskId;
+    const cpPath = path.join(tasksDir, `${taskId}.checkpoint.json`);
+    const cp = await readCheckpoint(cpPath);
+
+    // No checkpoint = just claimed, checkpoint not yet created -- skip conservatively
+    if (!cp) {
+      continue;
+    }
+
+    // Determine last activity: most recent log entry timestamp, or claimed_at
+    let lastActivityMs: number;
+    if (cp.log.length > 0) {
+      // Use the most recent log entry timestamp
+      const latestLog = cp.log[cp.log.length - 1]!;
+      lastActivityMs = new Date(latestLog.timestamp).getTime();
+    } else {
+      lastActivityMs = new Date(cp.claimed_at).getTime();
+    }
+
+    if (now - lastActivityMs > STALE_CLAIM_THRESHOLD_MS) {
+      log.warn("Stale claimed task detected, releasing to available", {
+        taskId,
+        lastActivity: new Date(lastActivityMs).toISOString(),
+        staleDurationMs: now - lastActivityMs,
+      });
+
+      try {
+        await qm.releaseTask(taskId);
+        releasedTasks.push(taskId);
+      } catch (err) {
+        log.error("Failed to release stale task", { taskId, error: String(err) });
+      }
+    }
+  }
+
+  return { releasedTasks };
 }
 
 // -- Helpers --
@@ -178,6 +265,7 @@ async function filterClaimableTasks(
   taskIds: string[],
   projectDir: string,
   agentCapabilities: string[],
+  maxRetries: number,
 ): Promise<Array<{ id: string; priority: string }>> {
   const claimable: Array<{ id: string; priority: string }> = [];
   const tasksDir = path.join(projectDir, "tasks");
@@ -210,6 +298,42 @@ async function filterClaimableTasks(
     if (fm.depends_on.length > 0) {
       const allDone = await checkAllDepsDone(fm.depends_on, tasksDir);
       if (!allDone) {
+        continue;
+      }
+    }
+
+    // Budget gate (D-05): check retry budget and backoff window
+    const cpPath = checkpointPath(taskFilePath);
+    const cp = await readCheckpoint(cpPath);
+    if (cp && cp.recovery_attempts >= maxRetries) {
+      // Budget exhausted -- escalate to blocked, not silently skip
+      log.warn("Task retry budget exhausted, escalating to blocked", {
+        taskId,
+        attempts: cp.recovery_attempts,
+        maxRetries,
+      });
+      // Fire escalation asynchronously -- don't block the scan loop
+      void executeRecoveryStrategy({
+        taskId,
+        workflowId: null,
+        projectDir,
+        agentId: "heartbeat-scanner",
+        failureCategory: "permanent",
+        failureReason: `Retry budget exhausted (${cp.recovery_attempts}/${maxRetries} attempts)`,
+      }).catch((err) => {
+        log.error("Failed to escalate budget-exhausted task", { taskId, error: String(err) });
+      });
+      continue;
+    }
+    if (cp && cp.last_attempted_at) {
+      const backoffIndex = Math.min(cp.recovery_attempts, BACKOFF_MS.length - 1);
+      const backoffMs = BACKOFF_MS[backoffIndex]!;
+      const eligibleAt = new Date(cp.last_attempted_at).getTime() + backoffMs;
+      if (Date.now() < eligibleAt) {
+        log.debug("Task in backoff window, skipping", {
+          taskId,
+          eligibleAt: new Date(eligibleAt).toISOString(),
+        });
         continue;
       }
     }
