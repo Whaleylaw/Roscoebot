@@ -138,7 +138,14 @@ Plans:
 1. Workflow progress is visible through existing board/queue/.index surfaces without requiring new UI
 2. The orchestrator updates workflow file status as constituent tasks complete or fail
 3. Users can query workflow status through existing project status commands and see task completion, blockers, and overall progress
-   **Plans**: TBD
+
+**Plans:** 3 plans
+
+Plans:
+
+- [ ] 06-01-PLAN.md -- Workflow index types, generateWorkflowIndex, SyncService watcher, BoardTaskEntry.workflow field
+- [ ] 06-02-PLAN.md -- Status command workflow section (text table + JSON output)
+- [ ] 06-03-PLAN.md -- Gateway RPC workflow endpoints, WebSocket broadcast, board UI badge
 
 ## Progress
 
@@ -153,4 +160,4 @@ Phases execute in numeric order: 1 -> 2 -> 3 -> 4 -> 5 -> 6
 | 3. Verification & Human-in-the-Loop                | 0/4            | Planning    | -         |
 | 4. Recovery & Resumability                         | 0/4            | Planning    | -         |
 | 5. Intake Pipeline & Templates                     | 0/5            | Planning    | -         |
-| 6. Progress & Observability                        | 0/TBD          | Not started | -         |
+| 6. Progress & Observability                        | 0/3            | Planning    | -         |
