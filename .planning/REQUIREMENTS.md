@@ -44,15 +44,15 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Recovery
 
-- [ ] **REC-01**: On task failure, orchestrator can retry the task (same shape, new attempt)
-- [ ] **REC-02**: On task failure, orchestrator can decompose the task further into smaller subtasks
-- [ ] **REC-03**: On task failure, orchestrator can reroute to a different worker type with different capabilities
-- [ ] **REC-04**: On task failure, orchestrator can block the task and escalate to the user
-- [ ] **REC-05**: Anti-loop budget enforced per task (default 3 retries) and per workflow (token ceiling), enforced outside the agent
+- [x] **REC-01**: On task failure, orchestrator can retry the task (same shape, new attempt)
+- [x] **REC-02**: On task failure, orchestrator can decompose the task further into smaller subtasks
+- [x] **REC-03**: On task failure, orchestrator can reroute to a different worker type with different capabilities
+- [x] **REC-04**: On task failure, orchestrator can block the task and escalate to the user
+- [x] **REC-05**: Anti-loop budget enforced per task (default 3 retries) and per workflow (token ceiling), enforced outside the agent
 
 ### Resumability
 
-- [ ] **RSM-01**: Workflow state persists across sessions via workflow file + task checkpoints
+- [x] **RSM-01**: Workflow state persists across sessions via workflow file + task checkpoints
 - [ ] **RSM-02**: Interrupted workflows can resume from last completed task, not from scratch
 - [ ] **RSM-03**: Orchestrator reads workflow file and checkpoint state on resume to reconstruct execution context
 
@@ -157,12 +157,12 @@ Which phases cover which requirements. Updated during roadmap creation.
 | VER-03      | Phase 3 | Complete |
 | VER-04      | Phase 3 | Complete |
 | VER-05      | Phase 3 | Complete |
-| REC-01      | Phase 4 | Pending  |
-| REC-02      | Phase 4 | Pending  |
-| REC-03      | Phase 4 | Pending  |
-| REC-04      | Phase 4 | Pending  |
-| REC-05      | Phase 4 | Pending  |
-| RSM-01      | Phase 4 | Pending  |
+| REC-01      | Phase 4 | Complete |
+| REC-02      | Phase 4 | Complete |
+| REC-03      | Phase 4 | Complete |
+| REC-04      | Phase 4 | Complete |
+| REC-05      | Phase 4 | Complete |
+| RSM-01      | Phase 4 | Complete |
 | RSM-02      | Phase 4 | Pending  |
 | RSM-03      | Phase 4 | Pending  |
 | HIL-01      | Phase 3 | Complete |
