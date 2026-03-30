@@ -9,8 +9,10 @@ import {
   readCheckpoint,
   writeCheckpoint,
 } from "./checkpoint.js";
-import { parseTaskFrontmatter } from "./frontmatter.js";
+import { parseProjectFrontmatter, parseTaskFrontmatter } from "./frontmatter.js";
 import { QueueManager } from "./queue-manager.js";
+import { executeRecoveryStrategy } from "./recovery-manager.js";
+import { BACKOFF_MS, DEFAULT_MAX_RETRIES } from "./recovery-types.js";
 import type { TaskFrontmatter } from "./types.js";
 
 const log = createSubsystemLogger("projects/heartbeat-scanner");
@@ -77,11 +79,24 @@ export async function scanAndClaimTask(opts: ScanAndClaimOpts): Promise<ScanAndC
       return { type: "idle" };
     }
 
+    // Read project-level max_task_retries (D-07)
+    let maxRetries = DEFAULT_MAX_RETRIES;
+    try {
+      const projectContent = await fs.readFile(path.join(projectDir, "PROJECT.md"), "utf8");
+      const parsed = parseProjectFrontmatter(projectContent, "PROJECT.md");
+      if (parsed.success) {
+        maxRetries = parsed.data.max_task_retries;
+      }
+    } catch {
+      // PROJECT.md not found or unreadable -- use default
+    }
+
     // Step 3: Filter claimable tasks
     const claimable = await filterClaimableTasks(
       queue.available.map((e) => e.taskId),
       projectDir,
       agentCapabilities,
+      maxRetries,
     );
 
     if (claimable.length === 0) {
@@ -178,6 +193,7 @@ async function filterClaimableTasks(
   taskIds: string[],
   projectDir: string,
   agentCapabilities: string[],
+  maxRetries: number,
 ): Promise<Array<{ id: string; priority: string }>> {
   const claimable: Array<{ id: string; priority: string }> = [];
   const tasksDir = path.join(projectDir, "tasks");
@@ -210,6 +226,42 @@ async function filterClaimableTasks(
     if (fm.depends_on.length > 0) {
       const allDone = await checkAllDepsDone(fm.depends_on, tasksDir);
       if (!allDone) {
+        continue;
+      }
+    }
+
+    // Budget gate (D-05): check retry budget and backoff window
+    const cpPath = checkpointPath(taskFilePath);
+    const cp = await readCheckpoint(cpPath);
+    if (cp && cp.recovery_attempts >= maxRetries) {
+      // Budget exhausted -- escalate to blocked, not silently skip
+      log.warn("Task retry budget exhausted, escalating to blocked", {
+        taskId,
+        attempts: cp.recovery_attempts,
+        maxRetries,
+      });
+      // Fire escalation asynchronously -- don't block the scan loop
+      void executeRecoveryStrategy({
+        taskId,
+        workflowId: null,
+        projectDir,
+        agentId: "heartbeat-scanner",
+        failureCategory: "permanent",
+        failureReason: `Retry budget exhausted (${cp.recovery_attempts}/${maxRetries} attempts)`,
+      }).catch((err) => {
+        log.error("Failed to escalate budget-exhausted task", { taskId, error: String(err) });
+      });
+      continue;
+    }
+    if (cp && cp.last_attempted_at) {
+      const backoffIndex = Math.min(cp.recovery_attempts, BACKOFF_MS.length - 1);
+      const backoffMs = BACKOFF_MS[backoffIndex]!;
+      const eligibleAt = new Date(cp.last_attempted_at).getTime() + backoffMs;
+      if (Date.now() < eligibleAt) {
+        log.debug("Task in backoff window, skipping", {
+          taskId,
+          eligibleAt: new Date(eligibleAt).toISOString(),
+        });
         continue;
       }
     }

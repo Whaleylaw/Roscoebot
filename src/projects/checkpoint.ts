@@ -1,4 +1,6 @@
 import { rename, readFile, writeFile } from "node:fs/promises";
+import type { FailureCategory } from "./recovery-types.js";
+import type { VerificationRecord } from "./verification.js";
 
 /**
  * Checkpoint data persisted alongside each task markdown file.
@@ -16,6 +18,13 @@ export interface CheckpointData {
   failed_approaches: Array<{ approach: string; reason: string }>;
   log: Array<{ timestamp: string; agent: string; action: string }>;
   notes: string;
+  verification?: VerificationRecord;
+  // Recovery tracking fields (D-08)
+  recovery_attempts: number;
+  last_attempted_at: string | null;
+  cumulative_tokens: number;
+  failure_category: FailureCategory | null;
+  failure_reason: string | null;
 }
 
 /**
@@ -46,6 +55,11 @@ export function createCheckpoint(opts: {
     failed_approaches: [],
     log: [{ timestamp: claimedAt, agent: opts.agentId, action: "Claimed task" }],
     notes: "",
+    recovery_attempts: 0,
+    last_attempted_at: null,
+    cumulative_tokens: 0,
+    failure_category: null,
+    failure_reason: null,
   };
 }
 
@@ -66,7 +80,16 @@ export async function writeCheckpoint(filePath: string, data: CheckpointData): P
 export async function readCheckpoint(filePath: string): Promise<CheckpointData | null> {
   try {
     const raw = await readFile(filePath, "utf-8");
-    return JSON.parse(raw) as CheckpointData;
+    // Apply defaults for recovery fields missing from older checkpoint files
+    const data = JSON.parse(raw) as Partial<CheckpointData>;
+    return {
+      recovery_attempts: 0,
+      last_attempted_at: null,
+      cumulative_tokens: 0,
+      failure_category: null,
+      failure_reason: null,
+      ...data,
+    } as CheckpointData;
   } catch (err: unknown) {
     if (err instanceof SyntaxError) {
       // Corrupted JSON -- warn but don't throw
