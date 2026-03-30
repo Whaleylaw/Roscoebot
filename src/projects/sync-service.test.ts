@@ -228,6 +228,152 @@ not_a_valid_field: true
     });
   });
 
+  describe("workflow incremental indexing", () => {
+    const WORKFLOW_MD = `---
+id: WF-001
+title: Test Workflow
+status: active
+goal: Complete the goal
+tasks:
+  - TASK-001
+template: null
+---
+
+# WF-001
+`;
+
+    async function createProjectWithWorkflow(root: string, name: string): Promise<string> {
+      const projectDir = path.join(root, name);
+      await fs.mkdir(path.join(projectDir, "tasks"), { recursive: true });
+      await fs.mkdir(path.join(projectDir, "workflows"), { recursive: true });
+      await fs.writeFile(path.join(projectDir, "PROJECT.md"), PROJECT_MD, "utf-8");
+      await fs.writeFile(path.join(projectDir, "tasks", "TASK-001.md"), TASK_MD, "utf-8");
+      await fs.writeFile(path.join(projectDir, "queue.md"), QUEUE_MD, "utf-8");
+      await fs.writeFile(path.join(projectDir, "workflows", "WF-001.md"), WORKFLOW_MD, "utf-8");
+      return projectDir;
+    }
+
+    it("processUpdate with workflows/WF-001.md change writes workflow index and summary", async () => {
+      const projectDir = await createProjectWithWorkflow(tmpDir, "wf-project");
+      const service = new ProjectSyncService(tmpDir);
+      const events: SyncEvent[] = [];
+      service.on("sync", (e: SyncEvent) => events.push(e));
+
+      // Call processUpdate directly (private method, accessed via type cast)
+      // oxlint-disable-next-line typescript/no-explicit-any
+      await (service as any).processUpdate(
+        "wf-project",
+        path.join(projectDir, "workflows", "WF-001.md"),
+        "change",
+      );
+
+      // Individual workflow index should exist
+      const wfJson = JSON.parse(
+        await fs.readFile(path.join(projectDir, ".index", "workflows", "WF-001.json"), "utf-8"),
+      );
+      expect(wfJson.id).toBe("WF-001");
+      expect(wfJson.progress.total).toBe(1);
+
+      // Summary should exist
+      const summaryJson = JSON.parse(
+        await fs.readFile(path.join(projectDir, ".index", "workflows.json"), "utf-8"),
+      );
+      expect(summaryJson.workflows).toHaveLength(1);
+      expect(summaryJson.workflows[0].id).toBe("WF-001");
+    });
+
+    it("processUpdate with workflows/WF-001.md change emits workflow:changed event", async () => {
+      const projectDir = await createProjectWithWorkflow(tmpDir, "wf-event-project");
+      const service = new ProjectSyncService(tmpDir);
+      const events: SyncEvent[] = [];
+      service.on("sync", (e: SyncEvent) => events.push(e));
+
+      // oxlint-disable-next-line typescript/no-explicit-any
+      await (service as any).processUpdate(
+        "wf-event-project",
+        path.join(projectDir, "workflows", "WF-001.md"),
+        "change",
+      );
+
+      expect(events).toContainEqual({
+        type: "workflow:changed",
+        project: "wf-event-project",
+        workflowId: "WF-001",
+      });
+    });
+
+    it("processUpdate ignores non-workflow files in workflows/ directory", async () => {
+      const projectDir = await createProjectWithWorkflow(tmpDir, "wf-ignore-project");
+      await fs.writeFile(
+        path.join(projectDir, "workflows", "README.md"),
+        "# Readme",
+        "utf-8",
+      );
+
+      const service = new ProjectSyncService(tmpDir);
+      const events: SyncEvent[] = [];
+      service.on("sync", (e: SyncEvent) => events.push(e));
+
+      // oxlint-disable-next-line typescript/no-explicit-any
+      await (service as any).processUpdate(
+        "wf-ignore-project",
+        path.join(projectDir, "workflows", "README.md"),
+        "change",
+      );
+
+      // No workflow:changed event should be emitted for README.md
+      const wfEvents = events.filter((e) => e.type === "workflow:changed");
+      expect(wfEvents).toHaveLength(0);
+    });
+
+    it("handleFileDelete for workflows/WF-001.md removes index and regenerates summary", async () => {
+      const projectDir = await createProjectWithWorkflow(tmpDir, "wf-delete-project");
+      const service = new ProjectSyncService(tmpDir);
+
+      // First create the workflow index
+      // oxlint-disable-next-line typescript/no-explicit-any
+      await (service as any).processUpdate(
+        "wf-delete-project",
+        path.join(projectDir, "workflows", "WF-001.md"),
+        "change",
+      );
+
+      // Verify index was created
+      await expect(
+        fs.access(path.join(projectDir, ".index", "workflows", "WF-001.json")),
+      ).resolves.toBeUndefined();
+
+      const events: SyncEvent[] = [];
+      service.on("sync", (e: SyncEvent) => events.push(e));
+
+      // Now simulate deletion
+      // oxlint-disable-next-line typescript/no-explicit-any
+      await (service as any).processUpdate(
+        "wf-delete-project",
+        path.join(projectDir, "workflows", "WF-001.md"),
+        "delete",
+      );
+
+      // Individual index should be removed
+      await expect(
+        fs.access(path.join(projectDir, ".index", "workflows", "WF-001.json")),
+      ).rejects.toThrow();
+
+      // Summary should still exist but be empty
+      const summaryJson = JSON.parse(
+        await fs.readFile(path.join(projectDir, ".index", "workflows.json"), "utf-8"),
+      );
+      expect(summaryJson.workflows).toHaveLength(0);
+
+      // Should have emitted workflow:changed event
+      expect(events).toContainEqual({
+        type: "workflow:changed",
+        project: "wf-delete-project",
+        workflowId: "WF-001",
+      });
+    });
+  });
+
   describe("event emission", () => {
     it("emits sync events on reindex", async () => {
       await createProject(tmpDir, "event-project");

@@ -2,17 +2,23 @@ import { EventEmitter } from "node:events";
 import fs from "node:fs/promises";
 import path from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
-import { parseProjectFrontmatter, parseTaskFrontmatter } from "./frontmatter.js";
+import {
+  parseProjectFrontmatter,
+  parseTaskFrontmatter,
+  parseWorkflowFrontmatter,
+} from "./frontmatter.js";
 import {
   generateAllIndexes,
   generateBoardIndex,
   generateProjectIndex,
   generateQueueIndex,
   generateTaskIndex,
+  generateWorkflowIndex,
+  generateWorkflowSummary,
   writeIndexFile,
 } from "./index-generator.js";
 import { parseQueue } from "./queue-parser.js";
-import type { SyncEvent } from "./sync-types.js";
+import type { SyncEvent, WorkflowIndex } from "./sync-types.js";
 import type { TaskFrontmatter } from "./types.js";
 
 /**
@@ -239,6 +245,58 @@ export class ProjectSyncService extends EventEmitter {
             this.emit("sync", event);
           }
         }
+      } else if (relative.startsWith("workflows/") && /^WF-\d+\.md$/.test(basename)) {
+        const workflowId = basename.replace(".md", "");
+        const workflowsIndexDir = path.join(indexDir, "workflows");
+
+        if (action === "delete") {
+          // Remove individual workflow index
+          await fs.unlink(path.join(workflowsIndexDir, `${workflowId}.json`)).catch(() => {});
+          await this.regenerateWorkflowSummary(projectDir);
+          const event: SyncEvent = {
+            type: "workflow:changed",
+            project: projectName,
+            workflowId,
+          };
+          this.emit("sync", event);
+        } else {
+          // Read and index the workflow
+          const content = await fs.readFile(filePath, "utf-8");
+          const wfResult = parseWorkflowFrontmatter(content, basename);
+          if (wfResult.success) {
+            const wfData = wfResult.data;
+            const tasksDir = path.join(projectDir, "tasks");
+            const taskStatuses = new Map<string, string>();
+
+            for (const taskId of wfData.tasks) {
+              try {
+                const taskContent = await fs.readFile(
+                  path.join(tasksDir, `${taskId}.md`),
+                  "utf-8",
+                );
+                const taskResult = parseTaskFrontmatter(taskContent, `${taskId}.md`);
+                if (taskResult.success) {
+                  taskStatuses.set(taskId, taskResult.data.status);
+                } else {
+                  taskStatuses.set(taskId, "unknown");
+                }
+              } catch {
+                taskStatuses.set(taskId, "unknown");
+              }
+            }
+
+            await fs.mkdir(workflowsIndexDir, { recursive: true });
+            const wfIndex = generateWorkflowIndex(wfData, taskStatuses);
+            await writeIndexFile(path.join(workflowsIndexDir, `${wfData.id}.json`), wfIndex);
+            await this.regenerateWorkflowSummary(projectDir);
+            const event: SyncEvent = {
+              type: "workflow:changed",
+              project: projectName,
+              workflowId: wfData.id,
+            };
+            this.emit("sync", event);
+          }
+        }
       }
     } catch {
       // Parse failure or read error -- skip (D-09)
@@ -287,6 +345,34 @@ export class ProjectSyncService extends EventEmitter {
 
     const boardIndex = generateBoardIndex(validTasks, columns);
     await writeIndexFile(path.join(indexDir, "board.json"), boardIndex);
+  }
+
+  /**
+   * Regenerate the workflows.json summary by reading all individual workflow index files.
+   */
+  private async regenerateWorkflowSummary(projectDir: string): Promise<void> {
+    const indexDir = path.join(projectDir, ".index");
+    const workflowsIndexDir = path.join(indexDir, "workflows");
+
+    const allWorkflows: WorkflowIndex[] = [];
+    try {
+      const files = await fs.readdir(workflowsIndexDir);
+      const wfFiles = files.filter((f) => /^WF-\d+\.json$/.test(f));
+
+      for (const wfFile of wfFiles) {
+        try {
+          const content = await fs.readFile(path.join(workflowsIndexDir, wfFile), "utf-8");
+          allWorkflows.push(JSON.parse(content) as WorkflowIndex);
+        } catch {
+          // Skip unreadable files
+        }
+      }
+    } catch {
+      // workflows/ index dir missing -- no workflows to summarize
+    }
+
+    const summary = generateWorkflowSummary(allWorkflows);
+    await writeIndexFile(path.join(indexDir, "workflows.json"), summary);
   }
 
   /**
