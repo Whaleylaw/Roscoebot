@@ -330,7 +330,14 @@ ${tasksYaml}
           status: string;
           goal: string;
           tasks: Record<string, string>;
-          progress: { total: number; done: number; claimed: number; review: number; blocked: number; available: number };
+          progress: {
+            total: number;
+            done: number;
+            claimed: number;
+            review: number;
+            blocked: number;
+            available: number;
+          };
         }>;
       };
       expect(jsonArg.workflows).toHaveLength(2);
@@ -340,7 +347,14 @@ ${tasksYaml}
       expect(wf1!.title).toBe("Active one");
       expect(wf1!.status).toBe("active");
       expect(wf1!.tasks).toEqual({ "TASK-001": "done", "TASK-002": "in-progress" });
-      expect(wf1!.progress).toEqual({ total: 2, done: 1, claimed: 1, review: 0, blocked: 0, available: 0 });
+      expect(wf1!.progress).toEqual({
+        total: 2,
+        done: 1,
+        claimed: 1,
+        review: 0,
+        blocked: 0,
+        available: 0,
+      });
 
       const wf2 = jsonArg.workflows.find((w) => w.id === "WF-002");
       expect(wf2).toBeDefined();

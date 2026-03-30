@@ -246,9 +246,7 @@ export async function projectsStatusCommand(
   // Workflows table (only show if workflows/ directory has workflow files)
   if (hasWorkflowsDir && workflows.length > 0) {
     runtime.log("\nWorkflows:");
-    const activeWfs = workflows.filter(
-      (wf) => wf.status === "active" || wf.status === "paused",
-    );
+    const activeWfs = workflows.filter((wf) => wf.status === "active" || wf.status === "paused");
     if (activeWfs.length === 0) {
       runtime.log("No active workflows");
     } else {
