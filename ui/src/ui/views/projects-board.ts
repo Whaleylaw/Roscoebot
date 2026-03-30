@@ -77,7 +77,7 @@ function renderCard(task: BoardTaskEntry, columnName: string, props: KanbanBoard
   const isInReview = columnName === "Review" || task.status === "review";
 
   return html`
-    <div class="${`projects-board-card ${priorityClass}`}">
+    <div class="${`projects-board-card ${priorityClass}`}" @click=${() => props.onTogglePeek(task.id)}>
       <div class="projects-board-card__top">
         <span class="projects-board-card__id">${task.id}</span>
         ${
@@ -95,6 +95,7 @@ function renderCard(task: BoardTaskEntry, columnName: string, props: KanbanBoard
             : nothing
         }
         ${isInReview ? html`<span class="projects-board-card__review-badge">${getReviewBadgeLabel(props)}</span>` : nothing}
+        ${task.workflow ? html`<span class="projects-board-card__workflow-badge">[${task.workflow}]</span>` : nothing}
       </div>
       <div class="projects-board-card__title">${task.title}</div>
       ${task.claimed_by ? html`<div class="projects-board-card__assignee">${task.claimed_by}</div>` : nothing}
@@ -122,7 +123,7 @@ function hasUnfinishedDeps(task: BoardTaskEntry, allTasks: BoardTaskEntry[]): bo
 
 function renderAgentBar(task: BoardTaskEntry, props: KanbanBoardProps) {
   return html`
-    <div class="projects-board-card__agent" @click=${() => props.onTogglePeek(task.id)}>
+    <div class="projects-board-card__agent" @click=${(e: Event) => e.stopPropagation()}>
       <span class="projects-board-card__agent-dot"></span>
       <span class="projects-board-card__agent-name">${task.claimed_by}</span>
     </div>
@@ -139,7 +140,22 @@ function renderPeekPanel(task: BoardTaskEntry, isInReview: boolean, props: Kanba
     `;
   }
   const cp = props.checkpoint;
-  if (!cp) return nothing;
+  if (!cp) {
+    // Show basic task info and review actions even without checkpoint data
+    return html`
+      <div class="projects-peek">
+        <div class="projects-peek__field">
+          <span class="projects-peek__label">Status</span>
+          <span class="projects-peek__value">${task.status}</span>
+        </div>
+        <div class="projects-peek__field">
+          <span class="projects-peek__label">Priority</span>
+          <span class="projects-peek__value">${task.priority}</span>
+        </div>
+        ${isInReview ? renderReviewActions(task.id, props) : nothing}
+      </div>
+    `;
+  }
 
   const logEntries = cp.log ?? [];
   const recentLog = logEntries.slice(-5).reverse();

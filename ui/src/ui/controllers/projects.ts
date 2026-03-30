@@ -21,6 +21,7 @@ export type BoardTaskEntry = {
   priority: string;
   claimed_by: string | null;
   depends_on: string[];
+  workflow?: string | null;
 };
 
 export type BoardColumn = {
@@ -222,13 +223,13 @@ export type ReviewActionState = {
 export async function reviewApprove(
   state: ReviewActionState,
   taskId: string,
-  projectDir: string,
+  project: string,
   notes?: string,
 ): Promise<void> {
   if (!state.client) return;
   await state.client.request("projects.review.approve", {
     taskId,
-    projectDir,
+    project,
     ...(notes ? { notes } : {}),
   });
 }
@@ -237,13 +238,13 @@ export async function reviewApprove(
 export async function reviewReject(
   state: ReviewActionState,
   taskId: string,
-  projectDir: string,
+  project: string,
   notes?: string,
 ): Promise<void> {
   if (!state.client) return;
   await state.client.request("projects.review.reject", {
     taskId,
-    projectDir,
+    project,
     ...(notes ? { notes } : {}),
   });
 }

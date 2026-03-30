@@ -765,6 +765,19 @@
   border-radius: var(--radius-full);
 }
 
+.projects-board-card__workflow-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--info);
+  background: rgba(59, 130, 246, 0.1);
+  padding: 4px 8px;
+  border-radius: var(--radius-full);
+  font-family: var(--mono);
+  white-space: nowrap;
+}
+
 /* Verification evidence section in peek panel */
 .projects-peek__verification {
   margin-top: 16px;
