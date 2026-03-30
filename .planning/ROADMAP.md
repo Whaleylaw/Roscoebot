@@ -104,8 +104,8 @@ Plans:
 
 - [x] 04-01-PLAN.md -- Recovery types, strategy selection, checkpoint/schema extensions
 - [x] 04-02-PLAN.md -- Recovery manager, failTask entry point in task-lifecycle
-- [ ] 04-03-PLAN.md -- Heartbeat scanner budget gate and backoff window
-- [ ] 04-04-PLAN.md -- Workflow resume scanner, workflow-status-hook failure handling
+- [x] 04-03-PLAN.md -- Heartbeat scanner budget gate and backoff window
+- [x] 04-04-PLAN.md -- Workflow resume scanner, workflow-status-hook failure handling
 
 ### Phase 5: Intake Pipeline & Templates
 

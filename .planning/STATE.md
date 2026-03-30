@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: Ready to execute
-stopped_at: Completed 04-02-PLAN.md
-last_updated: "2026-03-30T01:17:22.852Z"
+status: Phase complete — ready for verification
+stopped_at: Completed 04-04-PLAN.md
+last_updated: "2026-03-30T01:32:23.744Z"
 progress:
   total_phases: 6
-  completed_phases: 3
+  completed_phases: 4
   total_plans: 15
-  completed_plans: 13
+  completed_plans: 15
 ---
 
 # Project State
@@ -24,7 +24,7 @@ See: .planning/PROJECT.md (updated 2026-03-28)
 ## Current Position
 
 Phase: 04 (recovery-resumability) — EXECUTING
-Plan: 3 of 4
+Plan: 4 of 4
 
 ## Performance Metrics
 
@@ -59,6 +59,8 @@ _Updated after each plan completion_
 | Phase 03 P04 | 20min | 3 tasks | 6 files |
 | Phase 04 P01 | 2min | 2 tasks | 4 files |
 | Phase 04 P02 | 8min | 2 tasks | 4 files |
+| Phase 04 P03 | 3min | 2 tasks | 2 files |
+| Phase 04 P04 | 4min | 2 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -92,6 +94,9 @@ Recent decisions affecting current work:
 - [Phase 04]: notifyUser injectable stub (NotifyUserFn) with log-only default; wire to sessions_send in Phase 5
 - [Phase 04]: Decompose/reroute v1 stubs move to blocked+notify; require LLM decomposition and gateway agent registry
 - [Phase 04]: failTask hook fires AFTER executeRecoveryStrategy so handlers see updated checkpoint state
+- [Phase 04]: Budget-exhausted tasks escalated to blocked via executeRecoveryStrategy (not silently skipped) for user visibility
+- [Phase 04]: detectStaleClaims is separate export from scanAndClaimTask; stale threshold 30min using checkpoint log timestamps as activity proxy
+- [Phase 04]: interruptedTasks includes in-progress with no checkpoint; readWorkflowTaskStatuses shared helper for hook handlers; workflow failed only when ALL tasks done/blocked
 
 ### Pending Todos
 
@@ -104,6 +109,6 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-03-30T01:17:22.847Z
-Stopped at: Completed 04-02-PLAN.md
+Last session: 2026-03-30T01:32:23.742Z
+Stopped at: Completed 04-04-PLAN.md
 Resume file: None

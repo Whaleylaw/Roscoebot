@@ -53,8 +53,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### Resumability
 
 - [x] **RSM-01**: Workflow state persists across sessions via workflow file + task checkpoints
-- [ ] **RSM-02**: Interrupted workflows can resume from last completed task, not from scratch
-- [ ] **RSM-03**: Orchestrator reads workflow file and checkpoint state on resume to reconstruct execution context
+- [x] **RSM-02**: Interrupted workflows can resume from last completed task, not from scratch
+- [x] **RSM-03**: Orchestrator reads workflow file and checkpoint state on resume to reconstruct execution context
 
 ### Human-in-the-Loop
 
@@ -163,8 +163,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | REC-04      | Phase 4 | Complete |
 | REC-05      | Phase 4 | Complete |
 | RSM-01      | Phase 4 | Complete |
-| RSM-02      | Phase 4 | Pending  |
-| RSM-03      | Phase 4 | Pending  |
+| RSM-02      | Phase 4 | Complete |
+| RSM-03      | Phase 4 | Complete |
 | HIL-01      | Phase 3 | Complete |
 | HIL-02      | Phase 3 | Complete |
 | HIL-03      | Phase 3 | Complete |
