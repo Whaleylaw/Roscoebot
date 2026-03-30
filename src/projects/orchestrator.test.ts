@@ -8,8 +8,10 @@ import {
   createTaskBatch,
   orchestrateGoal,
   parseOrchestratorPayload,
+  synthesizeWorkflow,
   type DecomposedTask,
 } from "./orchestrator.js";
+import { parseTemplateFrontmatter } from "./template-schema.js";
 import { parseQueue } from "./queue-parser.js";
 import { generateWorkflowMd, generateQueueMd, generateProjectMd } from "./templates.js";
 
@@ -614,6 +616,139 @@ describe("parseOrchestratorPayload", () => {
     expect(result.ok).toBe(true);
     if (result.ok) {
       expect(result.payload.constraints).toEqual({});
+    }
+  });
+});
+
+describe("synthesizeWorkflow", () => {
+  it("produces valid markdown with YAML frontmatter containing name, description, steps", () => {
+    const result = synthesizeWorkflow({
+      goal: "Build a REST API with authentication and rate limiting",
+      goalTitle: "REST API with Auth",
+    });
+
+    expect(result.markdown).toContain("---");
+    expect(result.frontmatter.name).toBeTruthy();
+    expect(result.frontmatter.description).toBeTruthy();
+    expect(result.frontmatter.steps.length).toBeGreaterThan(0);
+  });
+
+  it("output parses through WorkflowTemplateFrontmatterSchema without errors", () => {
+    const result = synthesizeWorkflow({
+      goal: "Migrate database from Postgres to MySQL",
+      goalTitle: "Database Migration",
+    });
+
+    // Parse the generated markdown through the template schema parser
+    const parsed = parseTemplateFrontmatter(result.markdown);
+    expect(parsed.success).toBe(true);
+  });
+
+  it("includes goal-derived steps with owner, capabilities, verification_type fields", () => {
+    const result = synthesizeWorkflow({
+      goal: "Set up CI/CD pipeline and deploy to production",
+      goalTitle: "CI/CD Setup",
+    });
+
+    for (const step of result.frontmatter.steps) {
+      expect(step.owner).toBeDefined();
+      expect(step.verification_type).toBeDefined();
+      expect(step.id).toBeTruthy();
+      expect(step.title).toBeTruthy();
+    }
+  });
+
+  it("generates at least 2 steps from a multi-part goal", () => {
+    const result = synthesizeWorkflow({
+      goal: "First implement the data model, then build the API endpoints, finally write integration tests",
+      goalTitle: "Multi-Part Feature",
+    });
+
+    expect(result.frontmatter.steps.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("orchestrateGoal with synthesize", () => {
+  let tmpDir: string;
+
+  async function setupProject(): Promise<string> {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "orch-synth-"));
+    const projectDir = tmpDir;
+    await fs.mkdir(path.join(projectDir, "tasks"), { recursive: true });
+    await fs.mkdir(path.join(projectDir, "workflows"), { recursive: true });
+    await fs.writeFile(
+      path.join(projectDir, "PROJECT.md"),
+      generateProjectMd({ name: "test-project" }),
+      "utf-8",
+    );
+    await fs.writeFile(path.join(projectDir, "queue.md"), generateQueueMd(), "utf-8");
+    return projectDir;
+  }
+
+  afterEach(async () => {
+    if (tmpDir) {
+      await fs.rm(tmpDir, { recursive: true, force: true }).catch(() => {});
+    }
+  });
+
+  it("with synthesize=true writes WF-NNN.md to disk before creating tasks (SYN-03)", async () => {
+    const projectDir = await setupProject();
+    const tasks: DecomposedTask[] = [
+      makeTask({ id: "batch-1", title: "First task" }),
+    ];
+
+    const result = await orchestrateGoal({
+      projectDir,
+      goal: "Build the synthesized feature",
+      goalTitle: "Synthesized Feature",
+      tasks,
+      agentCapabilities: new Map(),
+      synthesize: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+
+    // The WF file should exist on disk
+    const wfPath = path.join(projectDir, "workflows", `${result.workflowId}.md`);
+    const wfContent = await fs.readFile(wfPath, "utf-8");
+    expect(wfContent).toContain("Build the synthesized feature");
+
+    // Workflow should be active
+    const wfParsed = parseWorkflowFrontmatter(wfContent, wfPath);
+    expect(wfParsed.success).toBe(true);
+    if (wfParsed.success) {
+      expect(wfParsed.data.status).toBe("active");
+      // Template field should indicate synthesized
+      expect(wfParsed.data.template).toBe("synthesized");
+    }
+  });
+
+  it("without synthesize flag works unchanged (backward compatible)", async () => {
+    const projectDir = await setupProject();
+    const tasks: DecomposedTask[] = [
+      makeTask({ id: "batch-1", title: "First task" }),
+    ];
+
+    const result = await orchestrateGoal({
+      projectDir,
+      goal: "Regular goal",
+      goalTitle: "Regular Feature",
+      tasks,
+      agentCapabilities: new Map(),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.taskIds).toHaveLength(1);
+
+    // Workflow exists and has no template field or null template
+    const wfPath = path.join(projectDir, "workflows", `${result.workflowId}.md`);
+    const wfContent = await fs.readFile(wfPath, "utf-8");
+    const wfParsed = parseWorkflowFrontmatter(wfContent, wfPath);
+    expect(wfParsed.success).toBe(true);
+    if (wfParsed.success) {
+      expect(wfParsed.data.template).toBeNull();
     }
   });
 });
