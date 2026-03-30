@@ -1,9 +1,8 @@
-import { createSubsystemLogger } from "../logging/subsystem.js";
-import {
-  createInternalHookEvent,
-  triggerInternalHook,
-} from "../hooks/internal-hooks.js";
 import { handleTaskPreComplete } from "../hooks/bundled/verification-hook.js";
+import { createInternalHookEvent, triggerInternalHook } from "../hooks/internal-hooks.js";
+import { createSubsystemLogger } from "../logging/subsystem.js";
+import { executeRecoveryStrategy } from "./recovery-manager.js";
+import type { FailureCategory } from "./recovery-types.js";
 
 const log = createSubsystemLogger("projects/task-lifecycle");
 
@@ -67,6 +66,67 @@ export async function completeTask(opts: CompleteTaskOpts): Promise<CompleteTask
   } else {
     log.info("Task did not reach done state", { taskId, outcome: result.outcome });
   }
+
+  return result;
+}
+
+export type FailTaskOpts = {
+  taskId: string;
+  workflowId: string | null;
+  projectDir: string;
+  agentId: string;
+  failureCategory: FailureCategory;
+  failureReason: string;
+  sessionKey?: string;
+};
+
+export type FailTaskResult = {
+  outcome: "retry" | "decompose" | "reroute" | "escalate";
+};
+
+/**
+ * Single entry point for task failure reporting. Agents/gateway MUST call
+ * this when reporting task failure -- it ensures the recovery chain executes
+ * and observability hooks fire in the correct order.
+ *
+ * Flow:
+ * 1. Call executeRecoveryStrategy() -- the recovery chain that reads checkpoint,
+ *    selects a strategy, and executes it (updating checkpoint and queue)
+ * 2. Fire "project:task-failed" hook AFTER recovery execution so hook handlers
+ *    see the updated checkpoint state (recovery_attempts, status, etc.)
+ * 3. Return the recovery outcome
+ */
+export async function failTask(opts: FailTaskOpts): Promise<FailTaskResult> {
+  const { taskId, workflowId, projectDir, agentId, failureCategory, failureReason, sessionKey } =
+    opts;
+
+  // Execute recovery chain FIRST so checkpoint is updated before hook fires
+  const result = await executeRecoveryStrategy({
+    taskId,
+    workflowId,
+    projectDir,
+    agentId,
+    failureCategory,
+    failureReason,
+    sessionKey,
+  });
+
+  // Fire observability hook AFTER recovery strategy execution
+  // This ensures hook handlers see the updated checkpoint state
+  // (recovery_attempts, status, etc.) and the recovery outcome
+  await triggerInternalHook(
+    createInternalHookEvent("project", "task-failed", sessionKey ?? "", {
+      taskId,
+      workflowId,
+      projectDir,
+      agentId,
+      failureCategory,
+      failureReason,
+      recoveryOutcome: result.outcome,
+    }),
+  );
+
+  log.info("Task failure processed", { taskId, outcome: result.outcome, failureCategory });
 
   return result;
 }

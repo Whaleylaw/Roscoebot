@@ -37,7 +37,7 @@ describe("executeRecoveryStrategy", () => {
 			{
 				id: taskId,
 				title: `Test ${taskId}`,
-				parent: opts?.parentTaskId ?? null,
+				parent: opts?.parentTaskId ?? undefined,
 			},
 			{
 				objective: "Test task",
@@ -117,7 +117,7 @@ describe("executeRecoveryStrategy", () => {
 		);
 		await fs.writeFile(path.join(projectDir, "tasks", "TASK-002.md"), parent2, "utf-8");
 		const parent1 = generateTaskMd(
-			{ id: "TASK-001", title: "Root parent", parent: null },
+			{ id: "TASK-001", title: "Root parent", parent: undefined },
 			{ objective: "", context: "", actionGuidance: "", successCriteria: "", verificationMethod: "" },
 		);
 		await fs.writeFile(path.join(projectDir, "tasks", "TASK-001.md"), parent1, "utf-8");
@@ -199,7 +199,7 @@ describe("executeRecoveryStrategy", () => {
 
 		// Create parent task
 		const parentContent = generateTaskMd(
-			{ id: "TASK-000", title: "Parent Task", parent: null },
+			{ id: "TASK-000", title: "Parent Task", parent: undefined },
 			{
 				objective: "Parent",
 				context: "",
@@ -262,7 +262,7 @@ describe("executeRecoveryStrategy", () => {
 		);
 		await fs.writeFile(path.join(projectDir, "tasks", "TASK-002.md"), parent2, "utf-8");
 		const parent1 = generateTaskMd(
-			{ id: "TASK-001", title: "Root parent", parent: null },
+			{ id: "TASK-001", title: "Root parent", parent: undefined },
 			{ objective: "", context: "", actionGuidance: "", successCriteria: "", verificationMethod: "" },
 		);
 		await fs.writeFile(path.join(projectDir, "tasks", "TASK-001.md"), parent1, "utf-8");
