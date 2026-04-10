@@ -14,13 +14,9 @@ echo "=== Seeding OpenClaw agent configuration ==="
 # Copy openclaw.json to the secrets path if not already there
 CONFIG_DEST="${OPENCLAW_CONFIG_PATH:-/data/.openclaw/openclaw.json}"
 mkdir -p "$(dirname "$CONFIG_DEST")"
-if [ ! -f "$CONFIG_DEST" ]; then
-    cp "$SCRIPT_DIR/openclaw.json" "$CONFIG_DEST"
-    echo "  Created config: $CONFIG_DEST"
-else
-    echo "  Config exists, skipping: $CONFIG_DEST"
-    echo "  To force update, delete it and re-run."
-fi
+# Always update config from repo (models/agents may have changed)
+cp "$SCRIPT_DIR/openclaw.json" "$CONFIG_DEST"
+echo "  Updated config: $CONFIG_DEST"
 
 # Seed each agent workspace
 for agent_dir in "$SCRIPT_DIR/workspaces"/*/; do

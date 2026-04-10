@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: openclaw
+    name: roscoebot-gateway
     runtime: docker
     plan: starter
     healthCheckPath: /health
