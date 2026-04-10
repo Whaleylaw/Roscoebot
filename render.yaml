@@ -19,6 +19,8 @@ services:
         value: /etc/secrets/openclaw.json
       - key: OPENCLAW_GATEWAY_TOKEN
         generateValue: true
+      - key: OPENROUTER_API_KEY
+        sync: false
     disk:
       name: openclaw-data
       mountPath: /data
