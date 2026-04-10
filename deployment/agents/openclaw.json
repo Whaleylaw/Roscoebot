@@ -1,0 +1,259 @@
+{
+  "gateway": {
+    "port": 10000,
+    "bind": "lan",
+    "token": "${OPENCLAW_GATEWAY_TOKEN}"
+  },
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-6",
+      "workspace": "/data/workspace"
+    },
+    "list": [
+      {
+        "id": "lead-triage",
+        "name": "Triage",
+        "workspace": "/data/workspaces/lead-triage",
+        "model": "anthropic/claude-sonnet-4-6",
+        "identity": {
+          "name": "Triage",
+          "emoji": "\ud83d\udccb"
+        },
+        "skills": [
+          "document-intake",
+          "police-report-analysis",
+          "import-case-documents"
+        ],
+        "tools": {
+          "profile": "coding",
+          "allow": [
+            "read",
+            "write",
+            "exec",
+            "web_search"
+          ],
+          "deny": [
+            "browser",
+            "canvas"
+          ]
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent"
+        },
+        "default": true
+      },
+      {
+        "id": "intake-setup",
+        "name": "Setup",
+        "workspace": "/data/workspaces/intake-setup",
+        "model": "anthropic/claude-sonnet-4-6",
+        "identity": {
+          "name": "Setup",
+          "emoji": "\ud83d\udcc2"
+        },
+        "skills": [
+          "case-file-organization",
+          "docusign-send",
+          "pip-application",
+          "lor-generator",
+          "document-processing",
+          "calendar-scheduling"
+        ],
+        "tools": {
+          "profile": "coding",
+          "allow": [
+            "read",
+            "write",
+            "exec",
+            "web_search"
+          ],
+          "deny": [
+            "canvas"
+          ]
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent"
+        }
+      },
+      {
+        "id": "treatment",
+        "name": "MedTrack",
+        "workspace": "/data/workspaces/treatment",
+        "model": "anthropic/claude-sonnet-4-6",
+        "identity": {
+          "name": "MedTrack",
+          "emoji": "\ud83c\udfe5"
+        },
+        "skills": [
+          "medical-records-request",
+          "medical-records-comprehensive-analysis",
+          "medical-chronology-ongoing",
+          "medical-chronology-pdf-export",
+          "liability-analysis",
+          "document-request"
+        ],
+        "tools": {
+          "profile": "coding",
+          "allow": [
+            "read",
+            "write",
+            "exec",
+            "web_search"
+          ],
+          "deny": [
+            "canvas"
+          ]
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent"
+        }
+      },
+      {
+        "id": "demand",
+        "name": "Demand",
+        "workspace": "/data/workspaces/demand",
+        "model": "anthropic/claude-sonnet-4-6",
+        "identity": {
+          "name": "Demand",
+          "emoji": "\ud83d\udcdd"
+        },
+        "skills": [
+          "demand-letter-generation",
+          "damages-calculation",
+          "multimedia-evidence-analysis",
+          "MorningBrief"
+        ],
+        "tools": {
+          "profile": "coding",
+          "allow": [
+            "read",
+            "write",
+            "exec",
+            "web_search"
+          ],
+          "deny": [
+            "canvas"
+          ]
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent"
+        }
+      },
+      {
+        "id": "negotiation",
+        "name": "Negotiator",
+        "workspace": "/data/workspaces/negotiation",
+        "model": "anthropic/claude-sonnet-4-6",
+        "identity": {
+          "name": "Negotiator",
+          "emoji": "\ud83e\udd1d"
+        },
+        "skills": [
+          "offer-evaluation",
+          "offer-tracking",
+          "negotiation-strategy",
+          "settlement-statement",
+          "supplemental-statement"
+        ],
+        "tools": {
+          "profile": "coding",
+          "allow": [
+            "read",
+            "write",
+            "exec",
+            "web_search"
+          ],
+          "deny": [
+            "canvas",
+            "browser"
+          ]
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent"
+        }
+      },
+      {
+        "id": "lien-specialist",
+        "name": "LienClear",
+        "workspace": "/data/workspaces/lien-specialist",
+        "model": "anthropic/claude-sonnet-4-6",
+        "identity": {
+          "name": "LienClear",
+          "emoji": "\ud83d\udcb0"
+        },
+        "skills": [
+          "lien-management",
+          "pip-waterfall"
+        ],
+        "tools": {
+          "profile": "coding",
+          "allow": [
+            "read",
+            "write",
+            "exec",
+            "web_search"
+          ],
+          "deny": [
+            "canvas",
+            "browser"
+          ]
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent"
+        }
+      },
+      {
+        "id": "litigator",
+        "name": "Litigator",
+        "workspace": "/data/workspaces/litigator",
+        "model": "anthropic/claude-sonnet-4-6",
+        "identity": {
+          "name": "Litigator",
+          "emoji": "\u2696\ufe0f"
+        },
+        "skills": [
+          "complaint-drafting",
+          "service-of-process",
+          "discovery-drafting",
+          "discovery-response",
+          "response-analysis",
+          "answer-analysis",
+          "deposition-strategy",
+          "deposition-prep",
+          "cross-examination",
+          "rules-based-examination",
+          "courtlistener-legal-research",
+          "legal-research",
+          "mediation-prep",
+          "trial-exhibit-prep",
+          "trial-presentation",
+          "expert-coordination"
+        ],
+        "tools": {
+          "profile": "coding",
+          "allow": [
+            "read",
+            "write",
+            "exec",
+            "web_search",
+            "browser"
+          ],
+          "deny": [
+            "canvas"
+          ]
+        },
+        "sandbox": {
+          "mode": "all",
+          "scope": "agent"
+        }
+      }
+    ]
+  },
+  "bindings": []
+}
