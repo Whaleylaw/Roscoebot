@@ -4,13 +4,19 @@ services:
     runtime: docker
     plan: starter
     healthCheckPath: /health
+    # Override Dockerfile CMD: bind to 0.0.0.0 (lan) and listen on Render's
+    # assigned $PORT. The Dockerfile defaults to loopback:18789 which Render
+    # cannot reach, causing perpetual 502s.
+    dockerCommand: "node openclaw.mjs gateway --allow-unconfigured --port 10000 --bind lan"
     envVars:
       - key: OPENCLAW_GATEWAY_PORT
-        value: "8080"
+        value: "10000"
       - key: OPENCLAW_STATE_DIR
         value: /data/.openclaw
       - key: OPENCLAW_WORKSPACE_DIR
         value: /data/workspace
+      - key: OPENCLAW_CONFIG_PATH
+        value: /etc/secrets/openclaw.json
       - key: OPENCLAW_GATEWAY_TOKEN
         generateValue: true
     disk:
