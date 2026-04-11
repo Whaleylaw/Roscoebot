@@ -6,7 +6,7 @@
   },
   "agents": {
     "defaults": {
-      "model": "openrouter/anthropic/claude-sonnet-4-6",
+      "model": "openai-codex/gpt-5.4",
       "workspace": "/data/workspace"
     },
     "list": [
@@ -14,7 +14,7 @@
         "id": "lead-triage",
         "name": "Triage",
         "workspace": "/data/workspaces/lead-triage",
-        "model": "openrouter/anthropic/claude-sonnet-4-6",
+        "model": "openai-codex/gpt-5.4",
         "identity": {
           "name": "Triage",
           "emoji": "\ud83d\udccb"
@@ -47,7 +47,7 @@
         "id": "intake-setup",
         "name": "Setup",
         "workspace": "/data/workspaces/intake-setup",
-        "model": "openrouter/anthropic/claude-sonnet-4-6",
+        "model": "openai-codex/gpt-5.4",
         "identity": {
           "name": "Setup",
           "emoji": "\ud83d\udcc2"
@@ -81,7 +81,7 @@
         "id": "treatment",
         "name": "MedTrack",
         "workspace": "/data/workspaces/treatment",
-        "model": "openrouter/anthropic/claude-sonnet-4-6",
+        "model": "openai-codex/gpt-5.4",
         "identity": {
           "name": "MedTrack",
           "emoji": "\ud83c\udfe5"
@@ -115,7 +115,7 @@
         "id": "demand",
         "name": "Demand",
         "workspace": "/data/workspaces/demand",
-        "model": "openrouter/anthropic/claude-sonnet-4-6",
+        "model": "openai-codex/gpt-5.4",
         "identity": {
           "name": "Demand",
           "emoji": "\ud83d\udcdd"
@@ -147,7 +147,7 @@
         "id": "negotiation",
         "name": "Negotiator",
         "workspace": "/data/workspaces/negotiation",
-        "model": "openrouter/anthropic/claude-sonnet-4-6",
+        "model": "openai-codex/gpt-5.4",
         "identity": {
           "name": "Negotiator",
           "emoji": "\ud83e\udd1d"
@@ -181,7 +181,7 @@
         "id": "lien-specialist",
         "name": "LienClear",
         "workspace": "/data/workspaces/lien-specialist",
-        "model": "openrouter/anthropic/claude-sonnet-4-6",
+        "model": "openai-codex/gpt-5.4",
         "identity": {
           "name": "LienClear",
           "emoji": "\ud83d\udcb0"
@@ -212,7 +212,7 @@
         "id": "litigator",
         "name": "Litigator",
         "workspace": "/data/workspaces/litigator",
-        "model": "openrouter/anthropic/claude-sonnet-4-6",
+        "model": "openai-codex/gpt-5.4",
         "identity": {
           "name": "Litigator",
           "emoji": "\u2696\ufe0f"
