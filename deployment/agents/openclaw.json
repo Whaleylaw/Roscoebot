@@ -258,5 +258,13 @@
       }
     ]
   },
+  "diagnostics": {
+    "enabled": true,
+    "otel": {
+      "enabled": true,
+      "serviceName": "roscoebot-openclaw",
+      "traces": true
+    }
+  },
   "bindings": []
 }
