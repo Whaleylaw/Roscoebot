@@ -174,6 +174,14 @@ COPY --from=runtime-assets --chown=node:node /app/docs ./docs
 COPY --from=runtime-assets --chown=node:node /app/qa ./qa
 COPY --from=runtime-assets --chown=node:node /app/deployment ./deployment
 
+# Pre-seed OpenClaw config from deployment directory into the default config path.
+# This ensures our config (with controlUi.enabled=false, agents, model settings)
+# is always present even if the CMD is overridden by a dockerCommand on Render.
+RUN mkdir -p /home/node/.openclaw && \
+    cp /app/deployment/agents/openclaw.json /home/node/.openclaw/openclaw.json && \
+    chown -R node:node /home/node/.openclaw
+ENV OPENCLAW_CONFIG_PATH=/home/node/.openclaw/openclaw.json
+
 # In npm-installed Docker images, prefer the copied source extension tree for
 # bundled discovery so package metadata that points at source entries stays valid.
 ENV OPENCLAW_BUNDLED_PLUGINS_DIR=/app/extensions
