@@ -2,7 +2,10 @@
   "gateway": {
     "port": 10000,
     "bind": "lan",
-    "token": "${OPEN...KEN}",
+    "auth": {
+      "mode": "token",
+      "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    },
     "controlUi": {
       "enabled": false
     }
