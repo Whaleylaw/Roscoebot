@@ -2,7 +2,10 @@
   "gateway": {
     "port": 10000,
     "bind": "lan",
-    "token": "${OPENCLAW_GATEWAY_TOKEN}"
+    "token": "${OPEN...KEN}",
+    "controlUi": {
+      "enabled": false
+    }
   },
   "agents": {
     "defaults": {
