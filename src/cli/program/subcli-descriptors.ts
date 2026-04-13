@@ -149,6 +149,11 @@ const subCliCommandCatalog = defineCommandDescriptorCatalog([
     hasSubcommands: true,
   },
   {
+    name: "recipes",
+    description: "List, inspect, and validate recipe cards",
+    hasSubcommands: true,
+  },
+  {
     name: "update",
     description: "Update OpenClaw and inspect update channel status",
     hasSubcommands: true,
