@@ -932,6 +932,49 @@ export const OpenClawSchema = z
       })
       .strict()
       .optional(),
+    recipes: z
+      .object({
+        dirs: z.array(z.string()).optional(),
+        allow: z.array(z.string()).optional(),
+        deny: z.array(z.string()).optional(),
+        defaults: z
+          .object({
+            model: z.union([
+              z.string(),
+              z
+                .object({
+                  primary: z.string().optional(),
+                  fallbacks: z.array(z.string()).optional(),
+                })
+                .strict(),
+            ]).optional(),
+            thinking: z.string().optional(),
+            tools: z
+              .object({
+                profile: z.string().optional(),
+                allow: z.array(z.string()).optional(),
+                alsoAllow: z.array(z.string()).optional(),
+                deny: z.array(z.string()).optional(),
+              })
+              .strict()
+              .optional(),
+            sandbox: z
+              .object({
+                mode: z.string().optional(),
+                workspaceAccess: z.string().optional(),
+                scope: z.string().optional(),
+                backend: z.string().optional(),
+              })
+              .strict()
+              .optional(),
+            cleanup: z.enum(["delete", "keep"]).optional(),
+            timeout_seconds: z.number().positive().optional(),
+          })
+          .strict()
+          .optional(),
+      })
+      .strict()
+      .optional(),
     plugins: z
       .object({
         enabled: z.boolean().optional(),

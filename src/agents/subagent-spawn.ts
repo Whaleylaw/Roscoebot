@@ -2,6 +2,9 @@ import crypto from "node:crypto";
 import { promises as fs } from "node:fs";
 import type { OpenClawConfig } from "../config/types.openclaw.js";
 import type { SubagentLifecycleHookRunner } from "../plugins/hooks.js";
+import { loadRecipeCached, isRecipeAllowed, synthesizeAgentConfig, createRecipeOverlay } from "../recipes/index.js";
+import type { RecipeCard, WorkspaceOverlay } from "../recipes/index.js";
+import { resolveStateDir } from "../config/paths.js";
 import { isValidAgentId, normalizeAgentId, parseAgentSessionKey } from "../routing/session-key.js";
 import {
   normalizeLowercaseStringOrEmpty,
@@ -84,6 +87,8 @@ export type SpawnSubagentParams = {
   task: string;
   label?: string;
   agentId?: string;
+  /** Recipe card ID. When set, spawns a specialized agent from the recipe definition. Mutually exclusive with agentId. */
+  recipe?: string;
   model?: string;
   thinking?: string;
   runTimeoutSeconds?: number;
@@ -361,6 +366,33 @@ export async function spawnSubagentDirect(
       error: `Invalid agentId "${requestedAgentId}". Agent IDs must match [a-z0-9][a-z0-9_-]{0,63}. Use agents_list to discover valid targets.`,
     };
   }
+
+  // ---------------------------------------------------------------------------
+  // Recipe card resolution
+  // ---------------------------------------------------------------------------
+  let recipeCard: RecipeCard | undefined;
+  let recipeOverlay: WorkspaceOverlay | undefined;
+  if (params.recipe) {
+    const recipeCfg = subagentSpawnDeps.loadConfig();
+    const stateDir = resolveStateDir(process.env);
+    recipeCard = await loadRecipeCached(params.recipe, recipeCfg.recipes, stateDir);
+    if (!recipeCard) {
+      return {
+        status: "error",
+        error: `Recipe not found: "${params.recipe}". Check that the recipe card exists in the recipes directory.`,
+      };
+    }
+    if (!isRecipeAllowed(recipeCard.id, recipeCfg.recipes)) {
+      return {
+        status: "forbidden",
+        error: `Recipe "${recipeCard.id}" is not allowed by the recipes config (check allow/deny lists).`,
+      };
+    }
+    recipeOverlay = createRecipeOverlay(recipeCard);
+  }
+  // When recipe is set, use the recipe id as the effective agentId.
+  const effectiveRequestedAgentId = recipeCard?.id ?? requestedAgentId;
+
   const modelOverride = params.model;
   const thinkingOverrideRaw = params.thinking;
   const requestThreadBinding = params.thread === true;
@@ -391,12 +423,13 @@ export async function spawnSubagentDirect(
   const hookRunner = subagentSpawnDeps.getGlobalHookRunner();
   const cfg = loadSubagentConfig();
 
-  // When agent omits runTimeoutSeconds, use the config default.
-  // Falls back to 0 (no timeout) if config key is also unset,
-  // preserving current behavior for existing deployments.
+  // When agent omits runTimeoutSeconds, use the recipe default if available,
+  // then fall back to config default. Falls back to 0 (no timeout) if neither
+  // is set, preserving current behavior for existing deployments.
+  const effectiveRunTimeoutSeconds = params.runTimeoutSeconds ?? recipeCard?.timeout_seconds;
   const runTimeoutSeconds = resolveConfiguredSubagentRunTimeoutSeconds({
     cfg,
-    runTimeoutSeconds: params.runTimeoutSeconds,
+    runTimeoutSeconds: effectiveRunTimeoutSeconds,
   });
   let modelApplied = false;
   let threadBindingReady = false;
@@ -441,14 +474,14 @@ export async function spawnSubagentDirect(
     resolveAgentConfig(cfg, requesterAgentId)?.subagents?.requireAgentId ??
     cfg.agents?.defaults?.subagents?.requireAgentId ??
     false;
-  if (requireAgentId && !requestedAgentId?.trim()) {
+  if (requireAgentId && !effectiveRequestedAgentId?.trim()) {
     return {
       status: "forbidden",
       error:
-        "sessions_spawn requires explicit agentId when requireAgentId is configured. Use agents_list to see allowed agent ids.",
+        "sessions_spawn requires explicit agentId (or recipe) when requireAgentId is configured. Use agents_list to see allowed agent ids.",
     };
   }
-  const targetAgentId = requestedAgentId ? normalizeAgentId(requestedAgentId) : requesterAgentId;
+  const targetAgentId = effectiveRequestedAgentId ? normalizeAgentId(effectiveRequestedAgentId) : requesterAgentId;
   if (targetAgentId !== requesterAgentId) {
     const allowAgents =
       resolveAgentConfig(cfg, requesterAgentId)?.subagents?.allowAgents ??
@@ -498,7 +531,12 @@ export async function spawnSubagentDirect(
     depth: childDepth,
     maxSpawnDepth,
   });
-  const targetAgentConfig = resolveAgentConfig(cfg, targetAgentId);
+  // For recipe spawns, synthesize a virtual AgentConfig from the recipe card
+  // instead of looking up a configured agent. For non-recipe spawns, use
+  // the standard config resolution.
+  const targetAgentConfig = recipeCard
+    ? synthesizeAgentConfig(recipeCard, cfg.recipes)
+    : resolveAgentConfig(cfg, targetAgentId);
   const plan = resolveSubagentModelAndThinkingPlan({
     cfg,
     targetAgentId,
@@ -610,6 +648,29 @@ export async function spawnSubagentDirect(
     childDepth,
     maxSpawnDepth,
   });
+
+  // When spawning from a recipe card, prepend the recipe's SOUL and AGENTS
+  // content to the child system prompt so the spawned agent has its full
+  // persona and operating instructions.
+  if (recipeOverlay) {
+    const recipeSections: string[] = [];
+    const soulContent = recipeOverlay.readFile("SOUL.md");
+    if (soulContent) {
+      recipeSections.push(`## Recipe Identity (SOUL)\n\n${soulContent}`);
+    }
+    const agentsContent = recipeOverlay.readFile("AGENTS.md");
+    if (agentsContent) {
+      recipeSections.push(`## Recipe Instructions (AGENTS)\n\n${agentsContent}`);
+    }
+    const toolsContent = recipeOverlay.readFile("TOOLS.md");
+    if (toolsContent) {
+      recipeSections.push(`## Recipe Tool Guidance (TOOLS)\n\n${toolsContent}`);
+    }
+    if (recipeSections.length > 0) {
+      const recipeBlock = `# Recipe Agent: ${recipeCard?.name ?? recipeCard?.id ?? "unknown"}\n\n${recipeSections.join("\n\n---\n\n")}`;
+      childSystemPrompt = `${recipeBlock}\n\n---\n\n${childSystemPrompt}`;
+    }
+  }
 
   let retainOnSessionKeep = false;
   let attachmentsReceipt:

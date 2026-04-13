@@ -111,6 +111,13 @@ const SessionsSpawnToolSchema = Type.Object({
         "When true, spawned subagent runs use lightweight bootstrap context. Only applies to runtime='subagent'.",
     }),
   ),
+  recipe: Type.Optional(
+    Type.String({
+      description:
+        "Recipe card ID. Spawns a specialized agent from a recipe card definition instead of cloning the parent. " +
+        "Mutually exclusive with agentId. Only applies to runtime='subagent'.",
+    }),
+  ),
 
   // Inline attachments (snapshot-by-value).
   // NOTE: Attachment contents are redacted from transcript persistence by sanitizeToolCallInputs.
@@ -177,8 +184,21 @@ export function createSessionsSpawnTool(
       const sandbox = params.sandbox === "require" ? "require" : "inherit";
       const streamTo = params.streamTo === "parent" ? "parent" : undefined;
       const lightContext = params.lightContext === true;
+      const recipe = readStringParam(params, "recipe");
       if (runtime === "acp" && lightContext) {
         throw new Error("lightContext is only supported for runtime='subagent'.");
+      }
+      if (recipe && runtime === "acp") {
+        return jsonResult({
+          status: "error",
+          error: "recipe is only supported for runtime='subagent'.",
+        });
+      }
+      if (recipe && requestedAgentId) {
+        return jsonResult({
+          status: "error",
+          error: "recipe and agentId are mutually exclusive. Use one or the other.",
+        });
       }
       // Back-compat: older callers used timeoutSeconds for this tool.
       const timeoutSecondsCandidate =
@@ -313,6 +333,7 @@ export function createSessionsSpawnTool(
           task,
           label: label || undefined,
           agentId: requestedAgentId,
+          recipe,
           model: modelOverride,
           thinking: thinkingOverrideRaw,
           runTimeoutSeconds,
